@@ -1,0 +1,29 @@
+/* Wrapper switcher (navbar) — a small tab group. */
+.wrapperSwitcher {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--ifm-color-emphasis-200);
+}
+
+.wrapperSwitcher__tab {
+  border: none;
+  background: transparent;
+  color: var(--ifm-navbar-link-color);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.wrapperSwitcher__tab:hover {
+  background: var(--ifm-color-emphasis-300);
+}
+
+.wrapperSwitcher__tab--active {
+  background: var(--ifm-color-primary);
+  color: #fff;
+}

@@ -1,0 +1,44 @@
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+
+```mermaid
+flowchart TB
+  App[User Application] --> Plugin[Initial Connection Strategy Plugin]
+  Plugin -->|Read cluster topology| Topology[(Topology cache)]
+
+  subgraph CLUSTER[Amazon Aurora Cluster]
+    Writer[(Current writer)]
+    ReaderA[(Reader A)]
+    ReaderB[(Reader B)]
+  end
+
+  Plugin -->|Substitute the endpoint and select a host by strategy| Writer
+  Plugin -.->|Reader strategy| ReaderA
+  Plugin -.->|Reader strategy| ReaderB
+  Topology -.-> CLUSTER
+```
+
+*Instead of relying on the DNS-resolved cluster endpoint — which can point at a stale node while DNS updates after failover — the plugin reads the topology and selects a host that matches the requested role, using the configured host selection strategy when several hosts match.*
+
+## How to enable
+
+Add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

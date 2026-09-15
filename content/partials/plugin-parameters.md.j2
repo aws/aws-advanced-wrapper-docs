@@ -1,0 +1,15 @@
+{#
+ # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ # Licensed under the Apache License, Version 2.0.
+ #
+ # Shared parameter table for plugin pages. Expects `params`, `wrapper_id`,
+ # and `type_names` in context. Each parameter has per-wrapper `spellings`
+ # (name / required / default | defaultNote / unit / example) and a shared
+ # `description`.
+ #}
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+{% for p in params -%}
+{% set ptype = p.spellings[wrapper_id].type | default(p.type) -%}
+| `{{ p.spellings[wrapper_id].name }}` | {{ type_names[ptype][wrapper_id] }} | {{ p.spellings[wrapper_id].required | default('No') }} | {% if p.spellings[wrapper_id].default is defined %}`{{ p.spellings[wrapper_id].default }}`{% else %}{{ p.spellings[wrapper_id].defaultNote | default('—') }}{% endif %} | {% if p.description is mapping %}{{ p.description[wrapper_id] }}{% else %}{{ p.description }}{% endif %}{% if p.spellings[wrapper_id].unit %} *({{ p.spellings[wrapper_id].unit }})*{% endif %}{% if p.spellings[wrapper_id].example %}<br/><br/>Example: `{{ p.spellings[wrapper_id].example }}`{% endif %} |
+{% endfor %}

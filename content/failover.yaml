@@ -1,0 +1,353 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Canonical registry for the Failover feature — the single source of truth.
+# The build reads this and produces one clean, wrapper-specific doc page per
+# wrapper. Because names/units come from here, the ms-vs-sec trap cannot be
+# mistyped in prose.
+
+# ---------------------------------------------------------------------------
+# Parameter TYPE display map (canonical -> per-wrapper spelling).
+# ---------------------------------------------------------------------------
+typeNames:
+  string:
+    ruby: "String"
+  boolean:
+    ruby: "Boolean"
+  integer:
+    ruby: "Integer"
+  float:
+    ruby: "Float"
+
+# ---------------------------------------------------------------------------
+# This page's plugin identity.
+# ---------------------------------------------------------------------------
+page:
+  pluginGroup: failover
+  thisCode:
+    ruby: failover
+
+pluginGroupLabels:
+  failover: "failover"
+  auth: "authentication"
+
+wrappers:
+  ruby:
+    wrapperName: "AWS Advanced Ruby Driver Wrapper"
+    label: "Ruby"
+    featureBlurb: "fast failover, IAM and AWS Secrets Manager authentication, Blue/Green Deployment support, and more"
+    availableSince: "1.0.0 (default plugin)"
+    codeLang: "ruby"
+    pluginListParam: "wrapper_plugins"
+    pluginGroups:
+      failover: [failover, gdb_failover]
+      auth: [iam, secrets_manager]
+    connectSnippet: |
+      require 'aws_advanced_ruby_driver_wrapper/postgresql'
+
+      conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+        host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+        dbname: "mydb",
+        user: "<username>",
+        password: "<password>",
+        wrapper_plugins: "failover",
+        failover_timeout_sec: 300.0  # SECONDS -- not milliseconds!
+      )
+
+    # The Overview page's "Getting started" section. A list of steps, each with an
+    # optional heading and an ordered list of blocks; a block is either prose
+    # (`text`) or a fenced code sample (`code` + `lang`).
+    #
+    # Active Record comes first because the adapters are the wrapper's primary
+    # integration: changing the adapter name is the whole change. `require:` is
+    # given explicitly on the gem line because the gem's entry point file is
+    # underscored while the gem name is hyphenated, so Bundler's default require
+    # would not find it.
+    gettingStarted:
+      note: "Requires Ruby 3.3 or later."
+      steps:
+        - title: "1. Add the gem"
+          blocks:
+            - lang: ruby
+              code: |
+                # Gemfile
+                gem 'aws-advanced-ruby-driver-wrapper', require: 'aws_advanced_ruby_driver_wrapper'
+                gem 'pg'        # or: gem 'mysql2'
+            - lang: bash
+              code: |
+                bundle install
+            - text: >-
+                That single require does everything: it registers the Active Record
+                adapters and defines the connection classes for direct use.
+
+        - title: "2. Point Active Record at your cluster"
+          blocks:
+            - text: >-
+                The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`,
+                which are drop-in replacements for `postgresql` and `mysql2`. Change the
+                adapter name and point the host at your cluster endpoint:
+            - lang: yaml
+              code: |
+                # config/database.yml
+                production:
+                  adapter: aws_postgresql
+                  host: my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com
+                  database: mydb
+                  username: <username>
+                  password: <password>
+            - text: >-
+                That is the whole change — no application code moves. Failover is the
+                default plugin, so connections made through this adapter already recover
+                when the cluster promotes a new writer. Enable more by adding wrapper
+                properties alongside the Active Record keys:
+            - lang: yaml
+              code: |
+                production:
+                  adapter: aws_postgresql
+                  # ...
+                  wrapper_plugins: failover,iam
+                  iam_region: us-east-1
+                  failover_timeout_sec: 300.0     # seconds
+            - text: >-
+                Active Record keeps its own connection pool and its reading and writing
+                roles; the wrapper's plugins run underneath both.
+
+        - title: "Or connect with the driver directly"
+          blocks:
+            - text: >-
+                If you use the `pg` or `mysql2` gem without Active Record, the wrapper
+                provides connection classes that stand in for `PG::Connection` and
+                `Mysql2::Client`:
+            - lang: ruby
+              code: |
+                conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+                  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+                  dbname: 'mydb',
+                  user: '<username>',
+                  password: '<password>',
+                  wrapper_plugins: 'failover',
+                  failover_timeout_sec: 300.0
+                )
+            - text: >-
+                The calls your code already makes on the driver connection keep working,
+                and the plugins act on each one.
+
+        - title: "Next"
+          blocks:
+            - text: >-
+                Not sure which plugins you need? [Set up by Scenario](setup) builds a
+                configuration from a few questions about your application.
+
+parameters:
+  - concept: failoverMode
+    summary: "Prioritizes which node role the wrapper connects to during failover."
+    type: string
+    spellings:
+      ruby: { name: failover_mode, required: "No", defaultNote: "depends on URL" }
+  - concept: enableFailover
+    summary: "Enables cluster-aware failover if the initial connection fails due to a network exception."
+    type: boolean
+    spellings:
+      ruby: { name: enable_connect_failover,    required: "No", default: "false" }
+  - concept: failoverTimeout
+    summary: "Maximum time to wait to reconnect after failover is initiated."
+    type: integer
+    unitTrap: true
+    spellings:
+      ruby: { name: failover_timeout_sec, type: float, required: "No", unit: s,  default: "300.0" }
+  - concept: failoverClusterTopologyRefreshRate
+    summary: "How often to refresh cluster topology during a writer failover."
+    type: integer
+    unitTrap: true
+    spellings:
+      ruby: { name: cluster_topology_refresh_rate_sec,    type: float, required: "No", unit: s, default: "5.0" }
+  - concept: failoverReaderHostSelectorStrategy
+    summary: "Strategy used to select a new reader host while opening a new connection during reader failover."
+    type: string
+    availability: { ruby: true }
+    spellings:
+      ruby: { name: failover_reader_host_selector_strategy, required: "No", default: "random" }
+  - concept: clusterInstanceHostPattern
+    summary: "DNS pattern to build instance endpoints when connecting via IP/CNAME/custom domain ('?' = instance-id placeholder)."
+    type: string
+    spellings:
+      ruby:
+        name: cluster_instance_host_pattern
+        required: "If connecting using an IP address or custom domain URL: Yes<br/><br/>Otherwise: No"
+        defaultNote: "auto-derived"
+
+errors:
+  - concept: failoverFailed
+    ruby: "FailoverFailedError"
+    connectionValid: "No"
+    reusable: "No"
+    action: "Failover could not find a new instance. Wait until the server is available, then reconnect."
+  - concept: failoverSuccess
+    ruby: "FailoverSuccessError"
+    connectionValid: "Yes"
+    reusable: "Yes"
+    action: "Failover succeeded outside a transaction. Reconfigure session state, then replay the last statement."
+  - concept: transactionResolutionUnknown
+    ruby: "TransactionStateUnknownError"
+    connectionValid: "Yes"
+    reusable: "Yes"
+    action: "Failover happened inside a transaction. Reconfigure session state, restart the transaction, replay all its statements."
+
+wrapperOnly:
+  ruby:
+    - |
+      ### ActiveRecord integration
+
+      Through ActiveRecord (the `aws_postgresql` / `aws_mysql2` adapters), the adapter's
+      `translate_exception` decides what your code rescues, and only one failover error is
+      translated:
+
+      - `FailoverSuccessError` and `TransactionStateUnknownError` are re-raised
+        **unchanged** after the adapter re-runs `configure_connection`. Your `rescue` sees
+        the wrapper error itself, and the connection is live on the new writer.
+      - `FailoverFailedError` is translated into `ActiveRecord::ConnectionFailed`, carrying
+        the original error as its message, so it appears in logs as one wrapped line:
+
+      ```text
+      ActiveRecord::ConnectionFailed: AwsAdvancedRubyDriverWrapper::Errors::FailoverFailedError: Unable to connect to a writer instance
+      ```
+
+      So `ActiveRecord::ConnectionFailed` means failover **failed**. The adapter marks the
+      connection broken, `active?` returns `false`, and ActiveRecord discards it and opens a
+      fresh connection on the next checkout. Do not rescue and discard the connection
+      yourself.
+    - |
+      ### Session state on failover
+
+      The AWS Advanced Ruby Driver Wrapper's `SessionStateService` currently tracks transaction and
+      autocommit state but does **not** yet transfer full session state across a
+      failover. `configure_connection` restores what ActiveRecord configures itself; after a
+      `FailoverSuccessError`, re-apply any other session settings your application depends
+      on (search path, timezone, prepared statements) before replaying work.
+
+# ---------------------------------------------------------------------------
+# Enhanced Failover Plugin registry.
+# ---------------------------------------------------------------------------
+enhanced:
+  pluginGroup: failover
+  wrappers:
+    ruby:
+      pluginCode: failover
+      legacyCode: null
+      monitorName: ClusterTopologyMonitor
+      legacyProviderName: Topology provider
+      clusterIdParam: cluster_id
+      availableSince: "1.0.0 (default plugin)"
+      hostPatternParam: cluster_instance_host_pattern
+      globalPatternParam: global_cluster_instance_host_patterns
+      monitoringPrefix: "topology_monitoring_"
+      connectSnippet: |
+        require 'aws_advanced_ruby_driver_wrapper/postgresql'
+
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          user: "<username>",
+          password: "<password>",
+          wrapper_plugins: "failover",
+          failover_timeout_sec: 300.0 # seconds
+        )
+      monitoringSnippet: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          user: "<username>",
+          password: "<password>",
+          wrapper_plugins: "failover",
+          topology_monitoring_connect_timeout: 10,
+          topology_monitoring_socket_timeout: 10
+        )
+      databaseProperty: dbname
+
+  parameters:
+    - concept: failoverMode
+      type: string
+      spellings:
+        ruby:
+          name: failover_mode
+          required: "No"
+          defaultNote: "depends on URL"
+      description:
+        ruby: "Defines the target role during failover: `strict_writer`, `reader_or_writer`, or `strict_reader`. A read-only cluster endpoint defaults to `reader_or_writer`; other URLs default to `strict_writer`."
+    - concept: clusterInstanceHostPattern
+      type: string
+      spellings:
+        ruby:
+          name: cluster_instance_host_pattern
+          required: "Required for IP addresses and custom domains; otherwise No"
+          defaultNote: "auto-derived for recognizable RDS endpoints"
+      description:
+        ruby: "Pattern used to build instance endpoints when the connection host is not a recognizable RDS endpoint. Use `?` as the instance identifier placeholder."
+    - concept: globalClusterInstanceHostPatterns
+      type: string
+      availability: { ruby: true }
+      spellings:
+        ruby:
+          name: global_cluster_instance_host_patterns
+          required: "Required for Aurora Global Databases; otherwise ignored"
+          defaultNote: "none"
+      description:
+        ruby: "Comma-separated instance host patterns for every global database region. Prefix custom-domain patterns with `[region]`."
+    - concept: clusterTopologyRefreshRate
+      type: integer
+      unitTrap: true
+      spellings:
+        ruby: { name: cluster_topology_refresh_rate_sec, type: float, required: "No", unit: s, default: "5.0" }
+      description:
+        ruby: "Regular interval at which the topology monitor refreshes the cluster when it is stable."
+    - concept: failoverTimeout
+      type: integer
+      unitTrap: true
+      spellings:
+        ruby: { name: failover_timeout_sec, type: float, required: "No", unit: s, default: "300.0" }
+      description:
+        ruby: "Maximum time allowed to reconnect to a new writer or reader after failover starts."
+    - concept: clusterTopologyHighRefreshRate
+      type: integer
+      unitTrap: true
+      spellings:
+        ruby: { name: cluster_topology_high_refresh_rate_sec, type: float, required: "No", unit: s, default: "0.1" }
+      description:
+        ruby: "Interval between topology updates during the high-rate period after a new writer is detected."
+    - concept: failoverReaderHostSelectorStrategy
+      type: string
+      spellings:
+        ruby: { name: failover_reader_host_selector_strategy, required: "No", default: "random" }
+      description:
+        ruby: "Strategy used to select a reader node during reader failover."
+    - concept: clusterId
+      type: string
+      spellings:
+        ruby: { name: cluster_id, required: "Required when one application uses multiple clusters; otherwise No", default: "1" }
+      description:
+        ruby: "Unique identifier for a cluster. Connections with the same identifier share one topology monitor and cache; different clusters must use different identifiers."
+    - concept: enableConnectFailover
+      type: boolean
+      availability: { ruby: true }
+      spellings:
+        ruby: { name: enable_connect_failover, required: "No", default: "false" }
+      description:
+        ruby: "Enables cluster-aware failover when the initial connection fails because of a network exception. The initial connection may be redirected to another instance."
+
+  wrapperOnly:
+    ruby:
+      - |
+        ### ActiveRecord integration
+
+        When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), only one failover error is translated. `FailoverSuccessError` and `TransactionStateUnknownError` are re-raised unchanged after the adapter re-runs `configure_connection`, so your `rescue` sees the wrapper error itself and the connection is live on the new writer. `FailoverFailedError` becomes `ActiveRecord::ConnectionFailed`, carrying the original error as its message — so that ActiveRecord error means failover **failed**, and the connection is marked broken and replaced on the next checkout. Do not rescue and discard the connection yourself.

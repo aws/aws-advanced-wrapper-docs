@@ -1,0 +1,79 @@
+{% import "partials/plugin-exclusivity.md.j2" as ex %}
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+
+```mermaid
+flowchart TB
+  App[User Application] --> Plugin[Global Database Failover Plugin]
+
+  subgraph HOME[Home region]
+    HW[(Writer)]
+    HR[(Reader)]
+  end
+
+  subgraph OOH[Other region]
+    OW[(Writer)]
+    OR[(Reader)]
+  end
+
+  Plugin -->|in-home mode: primary is in the home region| HOME
+  Plugin -.->|out-of-home mode: primary moved to another region| OOH
+```
+
+*The plugin compares the Global Database's current primary region with the configured home region. While they match, the **in-home** mode selects the failover target; once the primary moves to another region, the **out-of-home** mode applies instead.*
+
+## How to enable
+
+The plugin is not enabled by default. Add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter. After the plugin is loaded, the failover feature is enabled.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+
+{% set group = plugin.pluginGroup or 'failover' %}
+{% set others = (wrapper.pluginGroups[group] or []) | reject('equalto', plugin.code) | list %}
+:::warning
+{{ ex.exclusivity(plugin_group_labels[group], plugin.code, others) }}
+:::
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+
+{% if plugin.configExamples %}
+## Configuration examples
+
+{% for ex in plugin.configExamples %}
+### {{ ex.title }}
+
+**Goal:** {{ ex.goal }}
+
+**Solution:** configure the following:
+
+{% for s in ex.settings %}
+- {{ s }}
+{% endfor %}
+
+{% if ex.code %}
+```{{ ex.lang }}
+{{ ex.code | trim }}
+```
+
+{% endif %}
+{% if ex.note %}
+{{ ex.note }}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

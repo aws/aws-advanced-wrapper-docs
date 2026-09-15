@@ -1,0 +1,43 @@
+---
+title: {{ page_title }}
+---
+
+# {{ wrapper.fullLabel }} — Overview
+
+The **{{ wrapper.wrapperName }}** adds {{ wrapper.featureBlurb }} to your database
+connections, while staying a thin drop-in over the underlying driver.
+
+You are currently viewing the **{{ wrapper.label }}** documentation. Use the
+wrapper switcher in the top navigation bar to change wrappers — the page you're on
+will follow your choice where an equivalent page exists.
+
+## What's here
+
+{% for entry in nav %}
+- **[{{ entry.title }}]({{ entry.path }})**{{ (" — " ~ entry.blurb) if entry.blurb else "" }}
+{% endfor %}
+
+## Getting started
+
+{% if wrapper.gettingStarted.note %}
+{{ wrapper.gettingStarted.note }}
+
+{% endif %}
+{% for step in wrapper.gettingStarted.steps %}
+{% if step.title %}
+### {{ step.title }}
+
+{% endif %}
+{% for block in step.blocks %}
+{% if block.text %}
+{{ block.text }}
+
+{% endif %}
+{% if block.code %}
+```{{ block.lang }}
+{{ block.code | trim }}
+```
+
+{% endif %}
+{% endfor %}
+{% endfor %}

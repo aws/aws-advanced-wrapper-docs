@@ -1,0 +1,29 @@
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+{% for block in prerequisites %}
+
+{{ block }}
+{% endfor %}
+
+## How to enable
+
+Add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

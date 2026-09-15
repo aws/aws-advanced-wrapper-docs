@@ -1,0 +1,65 @@
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+
+:::warning
+{{ plugin.supported }}
+:::
+
+```mermaid
+stateDiagram-v2
+  [*] --> Created: Deployment created
+  Created --> Preparation: Switchover initiated
+  Preparation --> InProgress: Blue/Green traffic suspended
+  InProgress --> Post: Endpoints redirected to green
+  Post --> Completed: Blue DNS reconfigured
+  Completed --> [*]
+
+  note right of Preparation
+    Inventory blue/green endpoints and IP addresses
+  end note
+  note right of InProgress
+    Suspend calls to blue nodes;
+    substitute hostnames with IP addresses
+  end note
+  note right of Post
+    Monitor DNS; stop substitution;
+    reject new connections to green nodes
+  end note
+```
+
+*The plugin tracks the switchover through these phases. During the active phase it holds new blue connections and substitutes IP addresses to avoid stale DNS; after the switchover it monitors DNS until blue endpoints are reconfigured, then resumes normal handling. A detected failure or rollback returns the deployment to normal handling.*
+
+## How to enable
+
+Add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+{% for block in prerequisites %}
+
+{{ block }}
+{% endfor %}
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+
+## Configuring monitoring connections
+
+The plugin establishes dedicated monitoring connections to track Blue/Green Deployment status. To apply specific settings to these monitoring connections, prefix any configuration parameter with `{{ plugin.monitoringPrefix }}`:
+
+```{{ wrapper.codeLang }}
+{{ plugin.monitoringSnippet }}
+```
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

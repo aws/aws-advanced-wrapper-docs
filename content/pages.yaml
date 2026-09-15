@@ -1,0 +1,245 @@
+# Content model for the wrapper documentation site.
+#
+# The site is built on a multi-wrapper architecture but currently ships a single
+# wrapper (Ruby). Adding another wrapper later is a content change, not a code
+# change: register it in `wrappers:` below, add its values to the registries,
+# widen the relevant pages' `wrappers:` lists, and add a docs plugin instance in
+# site/docusaurus.config.js. Nothing here is hardcoded to a single wrapper.
+#
+# `wrappers`  — the wrappers and their display metadata.
+# `pages`     — the site's page tree. Each page declares:
+#                 id            : stable doc id (used for routing + manifest + parent links)
+#                 path          : slug under the wrapper (mirrors the wrapper dir hierarchy)
+#                 title         : sidebar / page title
+#                 category      : sidebar section (mirrors using-plugins, development-guide, etc.)
+#                 wrappers      : which wrappers this page exists for (subset of all)
+#                 parent        : id of the parent page (used by the missing-page fallback)
+#                 template      : which content template renders the body
+#                 contextProfile: which context bundle the template needs (see below).
+#
+# contextProfile — declares (in content, not code) what extra template context a
+# page receives. The generator maps each profile to a context builder, so adding
+# a new page type never requires editing generate.py. Recognized values:
+#   base      : (default) wrapper metadata + registry-wide helpers only.
+#   failover  : base + full failover parameter/error/wrapperOnly context.
+#   scenarios : base + mount info for the interactive scenario builder. The tree
+#               itself comes from content/scenarios.yaml, emitted per wrapper as
+#               src/generated/scenarios-<wrapper>.json.
+#   devguide  : base + per-wrapper dev-guide values (`dg`) + appended
+#               wrapper-only section (`dg_only`).
+# If omitted, the generator infers it from the template name for backward
+# compatibility, but new pages should set it explicitly.
+#
+# The generator produces docs-<wrapper>/<path>.md for each wrapper the page
+# applies to, plus site/manifest.json (id -> {wrappers, parent, path, title}).
+
+wrappers:
+  ruby:
+    label: "Ruby"
+    fullLabel: "Ruby"
+    # Product name checks. `canonicalName` is the only spelling allowed in
+    # rendered output; `forbiddenNames` are near-miss variations that must never
+    # appear. The generator fails the build on a match, which is how a name that
+    # gets assembled from parts (rather than taken from a registry) is caught.
+    canonicalName: "AWS Advanced Ruby Driver Wrapper"
+    forbiddenNames:
+      - "AWS Advanced Ruby Wrapper"
+      - "Ruby Wrapper"
+      - "Ruby wrapper"
+
+# Short descriptions for the Overview page's "What's here" list. Keyed by
+# sidebar category name, or by page id for a top-level page. The list itself is
+# built from the page tree below, so a new section appears automatically; only
+# its wording lives here. A section with no blurb still gets listed.
+sectionBlurbs:
+  setup-by-scenario: >-
+    answer a few questions about your application and get a working
+    configuration, with add-ons you can toggle
+  Using Plugins: >-
+    the feature plugins, what each one does, and how to configure it
+  Shared Configuration: >-
+    settings that several plugins rely on rather than belonging to any one of them
+  Development Guide: >-
+    internals, for contributing to the wrapper rather than using it
+
+pages:
+  - id: overview
+    path: overview
+    title: Overview
+    category: null
+    wrappers: [ruby]
+    parent: null
+    template: overview
+    contextProfile: base
+
+  # The interactive equivalent of a scenario tree: one page, answered by
+  # toggling.
+  - id: setup-by-scenario
+    path: setup
+    title: Set up by Scenario
+    category: null
+    wrappers: [ruby]
+    parent: overview
+    template: setup-by-scenario
+    contextProfile: scenarios
+
+  - id: using-plugins-enhanced-failover
+    path: enhanced-failover
+    title: Enhanced Failover Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: enhanced-failover
+    contextProfile: enhanced-failover
+
+  # ---------------------------------------------------------------------------
+  # Plugin pages. Each is single-sourced from content/plugins.yaml (keyed by the
+  # page path's last segment) via the `plugins` context profile and its own
+  # content/templates/plugin-*.md.j2.
+  # ---------------------------------------------------------------------------
+  - id: using-plugins-blue-green
+    path: using-plugins/blue-green
+    title: Blue/Green Deployment Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-blue-green
+    contextProfile: plugins
+
+  - id: using-plugins-custom-endpoint
+    path: using-plugins/custom-endpoint
+    title: Custom Endpoint Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-custom-endpoint
+    contextProfile: plugins
+
+  - id: using-plugins-gdb-failover
+    path: using-plugins/gdb-failover
+    title: Global Database Failover Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-gdb-failover
+    contextProfile: plugins
+
+  - id: using-plugins-iam-authentication
+    path: using-plugins/iam-authentication
+    title: IAM Authentication Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-iam-authentication
+    contextProfile: plugins
+
+  - id: using-plugins-aws-secrets-manager
+    path: using-plugins/aws-secrets-manager
+    title: AWS Secrets Manager Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-aws-secrets-manager
+    contextProfile: plugins
+
+  - id: using-plugins-initial-connection-strategy
+    path: using-plugins/initial-connection-strategy
+    title: Initial Connection Strategy Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-initial-connection-strategy
+    contextProfile: plugins
+
+  - id: using-plugins-kms-encryption
+    path: using-plugins/kms-encryption
+    title: KMS Encryption Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-kms-encryption
+    contextProfile: plugins
+
+  # ---------------------------------------------------------------------------
+  # Cross-cutting configuration, shared by several plugins.
+  # ---------------------------------------------------------------------------
+  - id: configuring-tls
+    path: configuring-tls
+    title: Configuring TLS/SSL
+    category: Shared Configuration
+    wrappers: [ruby]
+    parent: overview
+    template: configuring-tls
+    contextProfile: base
+
+  - id: aws-credentials
+    path: aws-credentials
+    title: AWS Credentials
+    category: Shared Configuration
+    wrappers: [ruby]
+    parent: overview
+    template: aws-credentials
+    contextProfile: base
+
+  - id: host-selection-strategies
+    path: host-selection-strategies
+    title: Host Selection Strategies
+    category: Shared Configuration
+    wrappers: [ruby]
+    parent: overview
+    template: host-selection-strategies
+    contextProfile: base
+
+  - id: development-guide-guide
+    path: development-guide/development-guide
+    title: Development Guide
+    category: Development Guide
+    wrappers: [ruby]
+    parent: overview
+    template: development-guide
+    contextProfile: devguide
+
+  - id: development-guide-architecture
+    path: development-guide/architecture
+    title: Architecture
+    category: Development Guide
+    wrappers: [ruby]
+    parent: development-guide-guide
+    template: architecture
+    contextProfile: devguide
+
+  - id: development-guide-service-container
+    path: development-guide/service-container
+    title: Service Container
+    category: Development Guide
+    wrappers: [ruby]
+    parent: development-guide-architecture
+    template: service-container
+    contextProfile: devguide
+
+  - id: development-guide-pipelines
+    path: development-guide/pipelines
+    title: Pipelines
+    category: Development Guide
+    wrappers: [ruby]
+    parent: development-guide-architecture
+    template: pipelines
+    contextProfile: devguide
+
+  - id: development-guide-loadable-plugins
+    path: development-guide/loadable-plugins
+    title: Loadable Plugins
+    category: Development Guide
+    wrappers: [ruby]
+    parent: development-guide-architecture
+    template: loadable-plugins
+    contextProfile: devguide
+
+  - id: development-guide-integration-tests
+    path: development-guide/integration-tests
+    title: Integration Tests
+    category: Development Guide
+    wrappers: [ruby]
+    parent: development-guide-architecture
+    template: integration-tests
+    contextProfile: devguide

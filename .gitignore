@@ -1,0 +1,23 @@
+# Python generator environment
+.venv/
+__pycache__/
+*.pyc
+
+# Docusaurus / Node
+site/node_modules/
+site/build/
+site/.docusaurus/
+
+# Generator OUTPUT is COMMITTED. Contributors run `python generate.py` before
+# committing so the rendered docs, sidebars, and generated data stay in sync
+# with content/. (These are intentionally NOT ignored.)
+#   site/docs-<wrapper>/      rendered markdown per wrapper
+#   site/sidebars-<wrapper>.js
+#   site/src/generated/       manifest.json + scenarios-<wrapper>.json
+
+# Editor / OS
+.idea/
+.DS_Store
+
+# Design notes (excluded per project preference)
+DESIGN-OPTIONS.md

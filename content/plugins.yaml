@@ -54,6 +54,7 @@ wrappers:
     label: "Ruby"
     codeLang: "ruby"
     pluginListParam: "wrapper_plugins"
+    compatibilityGuide: "../../compatibility"
 
 # ---------------------------------------------------------------------------
 # Plugin registry.

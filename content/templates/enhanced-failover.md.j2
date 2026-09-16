@@ -132,6 +132,8 @@ The `failover` plugin is enabled by default when `wrapper_plugins` is not specif
 {{ enhanced.wrappers[wrapper_id].connectSnippet }}
 ```
 
+Verify plugin compatibility within your {{ wrapper.label }} configuration using the [compatibility guide]({{ enhanced.wrappers[wrapper_id].compatibilityGuide }}).
+
 {% set this_code = enhanced.wrappers[wrapper_id].pluginCode %}
 {% set others = (wrapper.pluginGroups.failover or []) | reject('equalto', this_code) | list %}
 :::warning

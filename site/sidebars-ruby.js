@@ -32,6 +32,17 @@ const sidebars = {
     },
     {
       type: 'category',
+      label: "Compatibility",
+      collapsed: false,
+      items: [
+        "compatibility",
+        "compatibility/database-types",
+        "compatibility/endpoints",
+        "compatibility/cross-plugins"
+      ],
+    },
+    {
+      type: 'category',
       label: "Development Guide",
       collapsed: false,
       items: [

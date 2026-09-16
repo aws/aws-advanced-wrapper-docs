@@ -1,0 +1,28 @@
+{# Shared macros for the compatibility matrices. #}
+
+{% macro legend() -%}
+Legend: ✅ compatible · ❌ not compatible · blank = no constraint recorded.
+{%- endmacro %}
+
+{% macro plugin_label(p, depth) -%}
+{%- set prefix = '../' if depth > 0 else './' -%}
+{%- if p.deprecated -%}
+~~`{{ p.code }}`~~
+{%- elif p.page -%}
+[`{{ p.code }}`]({{ prefix }}{{ p.page }})
+{%- else -%}
+`{{ p.code }}`
+{%- endif -%}
+{%- endmacro %}
+
+{% macro cell(entry) -%}
+{%- if entry is none -%}
+{{ '' }}
+{%- elif entry.value -%}
+✅{% if entry.note %} ({{ entry.note }}){% endif %}
+{%- elif entry.marker -%}
+❌ [^{{ entry.marker }}]
+{%- else -%}
+❌{% if entry.note %} ({{ entry.note }}){% endif %}
+{%- endif -%}
+{%- endmacro %}

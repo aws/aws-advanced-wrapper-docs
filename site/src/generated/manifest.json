@@ -124,6 +124,42 @@
       "parentPath": "overview",
       "category": "Shared Configuration"
     },
+    "compatibility": {
+      "path": "compatibility",
+      "title": "Plugin Compatibility",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Compatibility"
+    },
+    "compatibility/database-types": {
+      "path": "compatibility/database-types",
+      "title": "Database Type Compatibility",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "compatibility",
+      "category": "Compatibility"
+    },
+    "compatibility/endpoints": {
+      "path": "compatibility/endpoints",
+      "title": "Database URL Type Compatibility",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "compatibility",
+      "category": "Compatibility"
+    },
+    "compatibility/cross-plugins": {
+      "path": "compatibility/cross-plugins",
+      "title": "Cross-Plugin Compatibility",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "compatibility",
+      "category": "Compatibility"
+    },
     "development-guide/development-guide": {
       "path": "development-guide/development-guide",
       "title": "Development Guide",

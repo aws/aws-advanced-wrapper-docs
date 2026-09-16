@@ -91,6 +91,8 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 Only one failover plugin may be enabled per connection. Do not use `gdb_failover` together with the other `failover` plugin at the same time for the same connection.
 :::
 
+Verify plugin compatibility within your Ruby configuration using the [compatibility guide](../compatibility).
+
 ## Configuration parameters
 
 | Parameter | Type | Required | Default | Description |

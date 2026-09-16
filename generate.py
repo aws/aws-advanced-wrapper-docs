@@ -6,6 +6,7 @@ Reads:
   content/pages.yaml      — the page tree (id, path, title, category, wrappers, parent,
                             template, contextProfile)
   content/failover.yaml   — the rich failover registry (params, errors, wrapperOnly, plugin groups)
+  content/compatibility.yaml — plugin catalog + database/endpoint/cross-plugin matrices
   content/scenarios.yaml  — the scenario builder tree (axes, questions, rules, add-ons)
   content/templates/*.j2  — one Jinja template per page 'template'
   content/partials/*      — shared prose includes
@@ -18,6 +19,8 @@ A content author adding a new page picks a profile in pages.yaml; they never edi
 this file. Recognized profiles:
   base      — (default) wrapper metadata + registry-wide helpers only.
   failover  — base + full parameter/error/wrapperOnly failover context.
+  compatibility — base + plugin compatibility matrices (`compat`) reduced to the
+              wrapper's own plugins, with per-wrapper overrides applied.
   scenarios — base + the scenario builder's mount info (`scn`). The tree itself
               is emitted as src/generated/scenarios-<wrapper>.json and consumed
               by the ConfigBuilder component, filtered to one wrapper.
@@ -109,6 +112,190 @@ def _profile_enhanced_failover(page, wid, regs):
         # Optional per-wrapper note about reconnection behavior when the wrapper
         # is used through a third-party provider (e.g. an ORM). Absent -> not rendered.
         "third_party_note": (reg.get("thirdPartyNote", {}) or {}).get(wid),
+    }
+
+
+def _resolve_cell(cell):
+    """Normalize a matrix cell to {value, note, reason} or None."""
+    if cell is None:
+        return None
+    return {
+        "value": bool(cell.get("value")),
+        "note": cell.get("note") or "",
+        "reason": cell.get("reason") or "",
+    }
+
+
+def _profile_compatibility(page, wid, regs):
+    """Resolve the compatibility matrices down to a single wrapper's plugins.
+
+    A wrapper only ever sees plugins it actually has: the catalog entry must
+    declare a code for that wrapper. Per-wrapper `overrides` win over the
+    shared matrix, so a wrapper whose implementation differs is not
+    misdocumented.
+    """
+    reg = regs["compatibility"]
+    overrides = reg.get("overrides", {}).get(wid, {}) or {}
+
+    def catalog(entries):
+        out = []
+        for entry in entries:
+            code = (entry.get("codes") or {}).get(wid)
+            if not code:
+                continue
+            out.append(
+                {
+                    "key": entry["key"],
+                    "code": code,
+                    "page": entry.get("page"),
+                    "deprecated": bool(entry.get("deprecated")),
+                    "description": entry.get("description", ""),
+                }
+            )
+        return out
+
+    plugins = catalog(reg.get("plugins", []))
+    universal = catalog(reg.get("universal", []))
+    # The cross-plugin matrix considers every plugin the wrapper has, including
+    # universal ones (which are compatible with everything).
+    all_plugins = plugins + universal
+    universal_codes = {p["code"] for p in universal}
+
+    reasons_text = reg.get("reasons", {}) or {}
+
+    def matrix(section, columns):
+        """Build a plugin×column matrix, attaching a footnote marker to each
+        incompatible cell. Cells that share a `reason` key share one footnote,
+        numbered in reading order (row by row, column by column)."""
+        rows = {}
+        source = reg.get(section, {}) or {}
+        section_overrides = overrides.get(section, {}) or {}
+        reason_to_marker = {}
+        notes = []
+        for plugin in plugins:
+            cells = {}
+            by_key = source.get(plugin["key"], {}) or {}
+            for column in columns:
+                cell = _resolve_cell(by_key.get(column))
+                if cell:
+                    cells[column] = cell
+            for column, cell in (section_overrides.get(plugin["code"], {}) or {}).items():
+                resolved = _resolve_cell(cell)
+                if resolved:
+                    cells[column] = resolved
+            # Assign footnote markers in column order for a stable reading order.
+            for column in columns:
+                cell = cells.get(column)
+                if not cell or cell["value"]:
+                    continue
+                reason_key = cell.get("reason") or ""
+                text = reasons_text.get(reason_key, cell.get("note") or "")
+                dedup = reason_key or f"__note__:{text}"
+                if dedup not in reason_to_marker:
+                    reason_to_marker[dedup] = len(notes) + 1
+                    notes.append({"n": reason_to_marker[dedup], "text": text})
+                cell["marker"] = reason_to_marker[dedup]
+            rows[plugin["code"]] = cells
+        return rows, notes
+
+    db_columns = reg.get("databaseTypeColumns", [])
+    ep_columns = reg.get("endpointColumns", [])
+    db_rows, db_notes = matrix("databaseTypes", db_columns)
+    ep_rows, ep_notes = matrix("endpoints", ep_columns)
+
+    # Cross-plugin data is triangular in the source; make it symmetric so the
+    # template can look up any ordered pair.
+    cross_source = reg.get("crossPlugins", {}) or {}
+    symmetric = {}
+    for row_key, columns in cross_source.items():
+        for col_key, cell in (columns or {}).items():
+            resolved = _resolve_cell(cell)
+            if not resolved:
+                continue
+            symmetric.setdefault(row_key, {})[col_key] = resolved
+            symmetric.setdefault(col_key, {})[row_key] = resolved
+
+    by_key_to_code = {p["key"]: p["code"] for p in all_plugins}
+    universal_keys = {p["key"] for p in universal}
+    cross = {}
+    for row_key, row_code in by_key_to_code.items():
+        cells = {}
+        for col_key, col_code in by_key_to_code.items():
+            if col_key == row_key:
+                continue
+            # A universal plugin is compatible with everything, with no note.
+            if row_key in universal_keys or col_key in universal_keys:
+                cell = symmetric.get(row_key, {}).get(col_key) or {"value": True, "note": ""}
+            else:
+                cell = symmetric.get(row_key, {}).get(col_key)
+            if cell:
+                cells[col_code] = cell
+        cross[row_code] = cells
+
+    # Cross-plugin page layout: one lower-triangular matrix over all plugins,
+    # split into two tables by COLUMN GROUP so no pair is mirrored and none is
+    # dropped. `order` is the canonical plugin order; a pair (row, col) is shown
+    # only when the column comes strictly before the row in that order (lower
+    # triangle), so a×b appears once and b×a never does.
+    #
+    #   Table 1: columns = first 4 plugins, rows = all plugins.
+    #   Table 2: columns = last 4 plugins, rows = the last 4 plugins.
+    #
+    # Every incompatible cell gets a footnote number assigned in reading order
+    # (table 1 top-to-bottom then table 2), collected into `notes`.
+    order = list(all_plugins)
+    pos = {p["code"]: i for i, p in enumerate(order)}
+    first4 = order[:4]
+    last4 = order[4:8]
+    notes = []
+
+    def build_table(columns, rows):
+        out_rows = []
+        for row in rows:
+            cells = []
+            for col in columns:
+                if row["code"] == col["code"]:
+                    state = "same"  # diagonal
+                    cell = None
+                elif pos[col["code"]] < pos[row["code"]]:
+                    cell = cross.get(row["code"], {}).get(col["code"])
+                    if cell is None:
+                        state = "blank"
+                    elif cell["value"]:
+                        state = "ok"
+                    else:
+                        state = "no"
+                else:
+                    state = "blank"  # upper triangle
+                    cell = None
+                marker = None
+                if state == "no":
+                    marker = len(notes) + 1
+                    notes.append({"n": marker, "text": cell.get("note") or ""})
+                cells.append({"state": state, "marker": marker})
+            out_rows.append({"plugin": row, "cells": cells})
+        return {"columns": columns, "rows": out_rows}
+
+    cross_tables = [
+        build_table(first4, order),
+        build_table(last4, last4),
+    ]
+
+    return {
+        "compat": {
+            "plugins": plugins,
+            "universal": universal,
+            "db_columns": db_columns,
+            "ep_columns": ep_columns,
+            "db": db_rows,
+            "ep": ep_rows,
+            "db_notes": db_notes,
+            "ep_notes": ep_notes,
+            "cross": cross,
+            "cross_tables": cross_tables,
+            "cross_notes": notes,
+            "endpoint_reference": reg.get("endpointReference", []),
+        }
     }
 
 
@@ -272,6 +459,7 @@ CONTEXT_PROFILES = {
     "base": _profile_base,
     "failover": _profile_failover,
     "enhanced-failover": _profile_enhanced_failover,
+    "compatibility": _profile_compatibility,
     "devguide": _profile_devguide,
     "plugins": _profile_plugins,
     "scenarios": _profile_scenarios,
@@ -388,11 +576,13 @@ def main():
     pages_doc = load("pages.yaml")
     failover_reg = load("failover.yaml")
     devguide_reg = load("dev-guide.yaml")
+    compatibility_reg = load("compatibility.yaml")
     plugins_reg = load("plugins.yaml")
     scenarios_reg = load("scenarios.yaml")
     regs = {
         "failover": failover_reg,
         "devguide": devguide_reg,
+        "compatibility": compatibility_reg,
         "plugins": plugins_reg,
         "scenarios": scenarios_reg,
     }

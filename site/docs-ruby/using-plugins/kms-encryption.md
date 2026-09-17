@@ -10,6 +10,16 @@ database rather than in application code. The plaintext never reaches the
 server, and neither does any data key: only a KMS-encrypted copy of each data
 key is stored.
 
+:::warning
+**A database-side HMAC-validation trigger is required on every encrypted
+column.** On its own, the plugin cannot guarantee that an encrypted column never
+holds a plaintext value — it only sees statements sent over a connection with the
+plugin enabled, and it identifies encrypted columns by best-effort SQL parsing.
+The server-side trigger, not the SQL parser, is what guarantees an encrypted
+column never holds plaintext. See [Server-side enforcement is required](#server-side-enforcement-is-required)
+and [Enforce encryption in the database](#enforce-encryption-in-the-database) below.
+:::
+
 
 :::info Available since
 Version 1.0.0
@@ -65,13 +75,13 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 | `encryption_kms_endpoint` | String | No | none | Endpoint URL override for KMS.<br/><br/>Example: `http://localhost:4566` |
 | `encryption_metadata_schema` | String | No | `encrypt` | Schema (or database, on MySQL) holding the `encryption_metadata` and `key_storage` tables.<br/><br/>Example: `app_encrypt` |
 | `encryption_metadata_cache_enabled` | Boolean | No | `true` | Cache the encryption metadata in memory. Leave enabled in production; when disabled, a short-lived metadata connection is opened for every statement that touches an encrypted column.<br/><br/>Example: `true` |
-| `encryption_metadata_cache_expiration_sec` | Float | No | `3600.0` | How long cached encryption metadata stays valid. *(s)*<br/><br/>Example: `600.0` |
-| `encryption_metadata_cache_refresh_interval_sec` | Float | No | `300.0` | How often the encryption metadata is refreshed in the background. *(s)*<br/><br/>Example: `60.0` |
+| `encryption_metadata_cache_expiration_sec` | Float | No | `3600.0` | How long cached encryption metadata stays valid. *(sec)*<br/><br/>Example: `600.0` |
+| `encryption_metadata_cache_refresh_interval_sec` | Float | No | `300.0` | How often the encryption metadata is refreshed in the background. *(sec)*<br/><br/>Example: `60.0` |
 | `encryption_data_key_cache_enabled` | Boolean | No | `true` | Cache decrypted data keys in memory. Leave enabled in production; when disabled, a KMS `Decrypt` call is made for every statement that touches an encrypted column.<br/><br/>Example: `true` |
 | `encryption_data_key_cache_max_size` | Integer | No | `1000` | Maximum number of decrypted data keys held in memory.<br/><br/>Example: `100` |
-| `encryption_data_key_cache_expiration_sec` | Float | No | `300.0` | How long a decrypted data key stays cached. *(s)*<br/><br/>Example: `600.0` |
+| `encryption_data_key_cache_expiration_sec` | Float | No | `300.0` | How long a decrypted data key stays cached. *(sec)*<br/><br/>Example: `600.0` |
 | `encryption_key_management_max_retries` | Integer | No | `3` | Maximum number of retries for throttled or failed key-management (KMS) operations.<br/><br/>Example: `5` |
-| `encryption_key_management_retry_backoff_base_sec` | Float | No | `0.1` | Base delay for the exponential backoff between key-management (KMS) retries. *(s)*<br/><br/>Example: `0.25` |
+| `encryption_key_management_retry_backoff_base_sec` | Float | No | `0.1` | Base delay for the exponential backoff between key-management (KMS) retries. *(sec)*<br/><br/>Example: `0.25` |
 | `encryption_audit_logging_enabled` | Boolean | No | `false` | Log an audit record for every key-management, encryption, and decryption operation.<br/><br/>Example: `true` |
 | `aws_credentials_provider` | Object | No | SDK default chain | A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain.<br/><br/>Example: `Aws::AssumeRoleCredentials.new(...)` |
 | `encryption_return_unverified_data` | Boolean | No | `false` | **Do not enable in production.** On read, return a value as stored when it cannot be confirmed to be this column's encrypted data instead of raising. Intended only for reading data written before the column was encrypted.<br/><br/>Example: `false` |
@@ -184,21 +194,155 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Create the trigger for every column that you want to encrypt.
 CREATE TRIGGER users_ssn_encrypted
 BEFORE INSERT OR UPDATE ON users
 FOR EACH ROW EXECUTE FUNCTION enforce_encrypted_column('ssn');
+
+-- Create the trigger for another column.
+CREATE TRIGGER users_dob_encrypted
+BEFORE INSERT OR UPDATE ON users
+FOR EACH ROW EXECUTE FUNCTION enforce_encrypted_column('dob');
 ```
 
 ### MySQL
 
 MySQL has no built-in HMAC function, so the equivalent builds HMAC-SHA256 out
-of `SHA2()`. The functions and trigger procedure are shipped with the source
-distribution; replace `SCHEMA_NAME` with the value of
-`encryption_metadata_schema`, then create a `BEFORE INSERT` and a
-`BEFORE UPDATE` trigger per encrypted column, each calling the procedure so a
-value that is not a valid payload raises `SIGNAL SQLSTATE '45000'`. On
+of `SHA2()`. Create the two functions and the validation procedure once per
+schema, then add a `BEFORE INSERT` and a `BEFORE UPDATE` trigger per encrypted
+column. Replace `SCHEMA_NAME` with the value of `encryption_metadata_schema`
+(`encrypt` by default). Requires MySQL 5.7+ / MariaDB 10.2+ for `SHA2()`. On
 Aurora/RDS MySQL, creating the functions may require the cluster parameter
 `log_bin_trust_function_creators` to be set to `1`.
+
+```sql
+DELIMITER $$
+
+-- HMAC-SHA256 built from SHA2(), which MySQL has no native HMAC for.
+DROP FUNCTION IF EXISTS hmac_sha256$$
+CREATE FUNCTION hmac_sha256(
+    message VARBINARY(65535),
+    key_data VARBINARY(64)
+)
+RETURNS VARBINARY(32)
+DETERMINISTIC
+NO SQL
+BEGIN
+    DECLARE block_size INT DEFAULT 64;  -- SHA-256 block size
+    DECLARE key_padded VARBINARY(64);
+    DECLARE ipad VARBINARY(64);
+    DECLARE opad VARBINARY(64);
+    DECLARE i INT DEFAULT 1;
+    DECLARE key_byte INT;
+
+    -- Reduce an over-long key to its hash, then zero-pad the key to the block size.
+    IF LENGTH(key_data) > block_size THEN
+        SET key_padded = CONCAT(UNHEX(SHA2(key_data, 256)), REPEAT(X'00', block_size - 32));
+    ELSE
+        SET key_padded = CONCAT(key_data, REPEAT(X'00', block_size - LENGTH(key_data)));
+    END IF;
+
+    -- ipad = key XOR 0x36 per byte, opad = key XOR 0x5C per byte, one raw byte at a time.
+    SET ipad = X'';
+    SET opad = X'';
+    WHILE i <= block_size DO
+        SET key_byte = ASCII(SUBSTRING(key_padded, i, 1));
+        SET ipad = CONCAT(ipad, UNHEX(LPAD(HEX(key_byte ^ 0x36), 2, '0')));
+        SET opad = CONCAT(opad, UNHEX(LPAD(HEX(key_byte ^ 0x5C), 2, '0')));
+        SET i = i + 1;
+    END WHILE;
+
+    RETURN UNHEX(SHA2(CONCAT(opad, UNHEX(SHA2(CONCAT(ipad, message), 256))), 256));
+END$$
+
+-- Verifies that a stored value carries a valid HMAC for the given HMAC key.
+DROP FUNCTION IF EXISTS verify_encrypted_data_hmac$$
+CREATE FUNCTION verify_encrypted_data_hmac(
+    data VARBINARY(65535),
+    hmac_key VARBINARY(32)
+)
+RETURNS BOOLEAN
+DETERMINISTIC
+NO SQL
+BEGIN
+    -- Minimum payload: 32 (HMAC) + 4 (key id) + 1 (type) + 12 (IV) + 0 (ciphertext) + 16 (GCM tag) = 65.
+    IF data IS NULL OR LENGTH(data) < 65 THEN
+        RETURN FALSE;
+    END IF;
+
+    RETURN SUBSTRING(data, 1, 32) = hmac_sha256(SUBSTRING(data, 33), hmac_key);
+END$$
+
+-- Called from a BEFORE INSERT / BEFORE UPDATE trigger to reject a value that is
+-- not a valid kms_encryption payload. Replace SCHEMA_NAME with encryption_metadata_schema.
+DROP PROCEDURE IF EXISTS validate_encrypted_data_hmac_before_insert$$
+CREATE PROCEDURE validate_encrypted_data_hmac_before_insert(
+    IN p_table_name VARCHAR(64),
+    IN p_column_name VARCHAR(64),
+    IN column_value VARBINARY(65535)
+)
+BEGIN
+    DECLARE v_hmac_key VARBINARY(32);
+
+    IF column_value IS NOT NULL THEN
+        SELECT ks.hmac_key INTO v_hmac_key
+        FROM SCHEMA_NAME.encryption_metadata em
+        JOIN SCHEMA_NAME.key_storage ks ON em.key_id = ks.id
+        WHERE em.table_name = p_table_name
+          AND em.column_name = p_column_name
+        LIMIT 1;
+
+        IF v_hmac_key IS NULL THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No HMAC key is configured for the encrypted column';
+        END IF;
+
+        IF NOT verify_encrypted_data_hmac(column_value, v_hmac_key) THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Column does not carry a valid HMAC tag (plaintext or tampered value)';
+        END IF;
+    END IF;
+END$$
+
+DELIMITER ;
+```
+
+Then create a pair of triggers for every column that you want to encrypt. For
+example, on `users.ssn`:
+
+```sql
+DELIMITER $$
+-- Create both triggers for every column that you want to encrypt.
+CREATE TRIGGER users_ssn_hmac_check
+BEFORE INSERT ON users
+FOR EACH ROW
+BEGIN
+    CALL validate_encrypted_data_hmac_before_insert('users', 'ssn', NEW.ssn);
+END$$
+
+CREATE TRIGGER users_ssn_hmac_check_update
+BEFORE UPDATE ON users
+FOR EACH ROW
+BEGIN
+    CALL validate_encrypted_data_hmac_before_insert('users', 'ssn', NEW.ssn);
+END$$
+
+-- Repeat the pair for another column, e.g. users.dob.
+CREATE TRIGGER users_dob_hmac_check
+BEFORE INSERT ON users
+FOR EACH ROW
+BEGIN
+    CALL validate_encrypted_data_hmac_before_insert('users', 'dob', NEW.dob);
+END$$
+
+CREATE TRIGGER users_dob_hmac_check_update
+BEFORE UPDATE ON users
+FOR EACH ROW
+BEGIN
+    CALL validate_encrypted_data_hmac_before_insert('users', 'dob', NEW.dob);
+END$$
+DELIMITER ;
+```
 
 
 ## Hardening the deployment

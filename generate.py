@@ -103,6 +103,12 @@ def _profile_enhanced_failover(page, wid, regs):
         "params": reg["parameters"],
         "errors": reg.get("errors", regs["failover"]["errors"]),
         "wrapperOnly": reg.get("wrapperOnly", {}),
+        # Snake-case list for the shared `{% for block in wrapper_only %}` render
+        # loop (mirrors the plugins profile). Wrapper-specific appended prose.
+        "wrapper_only": (reg.get("wrapperOnly", {}) or {}).get(wid, []),
+        # Optional per-wrapper note about reconnection behavior when the wrapper
+        # is used through a third-party provider (e.g. an ORM). Absent -> not rendered.
+        "third_party_note": (reg.get("thirdPartyNote", {}) or {}).get(wid),
     }
 
 

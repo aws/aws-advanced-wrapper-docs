@@ -153,9 +153,7 @@ export default function ConfigBuilder({ data }) {
                       .join(' ')}
                     onClick={() => !reason && setAnswer(question.id, option.id)}
                   >
-                    <span className={styles.checkMark} aria-hidden="true">
-                      {chosen ? '✓' : ''}
-                    </span>
+                    <span className={[styles.checkMark, styles.radioMark].join(' ')} aria-hidden="true" />
                     <span className={styles.optionText}>
                       <span className={styles.optionLabel}>{option.label}</span>
                       {option.hint && <span className={styles.optionHint}>{option.hint}</span>}
@@ -206,7 +204,7 @@ export default function ConfigBuilder({ data }) {
                         }))
                       }
                     >
-                      <span className={styles.checkMark} aria-hidden="true">
+                      <span className={[styles.checkMark, styles.checkboxMark].join(' ')} aria-hidden="true">
                         {state.addons[addon.id] ? '✓' : ''}
                       </span>
                       <span className={styles.optionText}>
@@ -248,8 +246,11 @@ export default function ConfigBuilder({ data }) {
                             }))
                           }
                         >
-                          <span className={styles.checkMark} aria-hidden="true">
-                            {on ? '✓' : ''}
+                          <span
+                            className={[styles.checkMark, addon.exclusive ? styles.radioMark : styles.checkboxMark].join(' ')}
+                            aria-hidden="true"
+                          >
+                            {addon.exclusive ? '' : (on ? '✓' : '')}
                           </span>
                           <span className={styles.optionText}>
                             <span className={styles.optionLabel}>{option.label}</span>

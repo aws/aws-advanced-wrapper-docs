@@ -100,7 +100,7 @@ Plugins should not track host information themselves. Instead, the service conta
 
 The {{ dg.productName }} has two host list providers, the `ConnectionStringHostListProvider` and the `{{ dg.hostListProvider }}`.
 
-The `{{ dg.hostListProvider }}` provides information about the Aurora cluster. It uses the current connection to track the available hosts and their roles in the cluster.
+The `{{ dg.hostListProvider }}` provides information about the Aurora cluster. It uses an internal monitoring connection to track the available hosts and their roles in the cluster.
 
 The `ConnectionStringHostListProvider` is a static host list provider, whereas the `{{ dg.hostListProvider }}` is a dynamic host list provider. A static host list provider will fetch the host list during initialization and does not update the host list afterwards, whereas a dynamic host list provider will update the host list information based on database status.
 {% if dg.hostListProviderNotes %}

@@ -69,10 +69,10 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `custom_endpoint_region` | String | No | parsed from URL | The region of the cluster's custom endpoints. Parsed from the URL when not specified.<br/><br/>Example: `us-east-1` |
-| `custom_endpoint_info_refresh_rate_sec` | Float | No | `30.0` | How frequently custom endpoint monitors fetch custom endpoint info. *(s)*<br/><br/>Example: `20.0` |
+| `custom_endpoint_region` | String | Required for IP addresses and custom CNAMEs; otherwise No | parsed from URL | The region of the cluster's custom endpoints. Parsed from the URL when not specified, and required for endpoints that carry no region — IP addresses and custom CNAMEs/domains — because the region cannot be parsed from them.<br/><br/>Example: `us-east-1` |
+| `custom_endpoint_info_refresh_rate_sec` | Float | No | `30.0` | How frequently custom endpoint monitors fetch custom endpoint info. *(sec)*<br/><br/>Example: `20.0` |
 | `custom_endpoint_info_refresh_rate_backoff_factor` | Integer | No | `2` | Exponential backoff factor for the custom endpoint monitor when it encounters an RDS throttling exception. The refresh interval increases by this factor on throttling and decreases by it on success.<br/><br/>Example: `5` |
-| `custom_endpoint_info_max_refresh_rate_sec` | Float | No | `300.0` | Maximum time the custom endpoint monitor waits between fetches for custom endpoint info. *(s)*<br/><br/>Example: `600.0` |
-| `custom_endpoint_monitor_expiration_sec` | Float | No | `900.0` | How long a monitor runs without use before expiring and being removed. *(s)*<br/><br/>Example: `600.0` |
+| `custom_endpoint_info_max_refresh_rate_sec` | Float | No | `300.0` | Maximum time the custom endpoint monitor waits between fetches for custom endpoint info. *(sec)*<br/><br/>Example: `600.0` |
+| `custom_endpoint_monitor_expiration_sec` | Float | No | `900.0` | How long a monitor runs without use before expiring and being removed. *(sec)*<br/><br/>Example: `600.0` |
 | `wait_for_custom_endpoint_info` | Boolean | No | `true` | Whether to wait for custom endpoint info to become available before connecting or executing a method. Disabling this may result in occasional connections to instances outside of the custom endpoint.<br/><br/>Example: `true` |
-| `wait_for_custom_endpoint_info_timeout_sec` | Float | No | `5.0` | Maximum time the plugin waits for custom endpoint info to be made available by the monitor. *(s)*<br/><br/>Example: `7.0` |
+| `wait_for_custom_endpoint_info_timeout_sec` | Float | No | `5.0` | Maximum time the plugin waits for custom endpoint info to be made available by the monitor. *(sec)*<br/><br/>Example: `7.0` |

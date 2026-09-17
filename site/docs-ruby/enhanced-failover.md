@@ -121,7 +121,7 @@ gantt
 
 *Each instance monitor connects and checks its own role, so the monitor never depends on a reader's topology view. Instance-1 answers yes and reports `instance-1 (W), instance-2 (R), instance-3 (R)`. Instance-2 answers no and reports that the writer changed. Instance-3, the old writer, still reports `instance-3 (W)` — the stale reading the direct role check avoids. Relative time, not to scale.*
 
-This direct role check avoids relying solely on a reader's potentially stale role information. The monitor stops unnecessary instance probes after a writer is confirmed and continues topology updates at the high refresh rate while the cluster stabilizes.
+This direct role check avoids relying solely on a reader's potentially stale topology information. The monitor stops unnecessary instance probes after a writer is confirmed and continues topology updates at the high refresh rate while the cluster stabilizes.
 
 ## How to enable
 
@@ -153,10 +153,9 @@ In addition to parameters for the underlying database driver, configure the foll
 |-----------|------|----------|---------|-------------|
 | `failover_mode` | String | No | depends on URL | Defines the target role during failover: `strict_writer`, `reader_or_writer`, or `strict_reader`. A read-only cluster endpoint defaults to `reader_or_writer`; other URLs default to `strict_writer`. |
 | `cluster_instance_host_pattern` | String | Required for IP addresses and custom domains; otherwise No | auto-derived for recognizable RDS endpoints | Pattern used to build instance endpoints when the connection host is not a recognizable RDS endpoint. Use `?` as the instance identifier placeholder. |
-| `global_cluster_instance_host_patterns` | String | Required for Aurora Global Databases; otherwise ignored | none | Comma-separated instance host patterns for every global database region. Prefix custom-domain patterns with `[region]`. |
-| `cluster_topology_refresh_rate_sec` | Float | No | `5.0` | Regular interval at which the topology monitor refreshes the cluster when it is stable. *(s)* |
-| `failover_timeout_sec` | Float | No | `300.0` | Maximum time allowed to reconnect to a new writer or reader after failover starts. *(s)* |
-| `cluster_topology_high_refresh_rate_sec` | Float | No | `0.1` | Interval between topology updates during the high-rate period after a new writer is detected. *(s)* |
+| `cluster_topology_refresh_rate_sec` | Float | No | `5.0` | Regular interval at which the topology monitor refreshes the cluster when it is stable. *(sec)* |
+| `failover_timeout_sec` | Float | No | `300.0` | Maximum time allowed to reconnect to a new writer or reader after failover starts. *(sec)* |
+| `cluster_topology_high_refresh_rate_sec` | Float | No | `0.1` | Interval between topology updates during the high-rate period after a new writer is detected. *(sec)* |
 | `failover_reader_host_selector_strategy` | String | No | `random` | Strategy used to select a reader node during reader failover. |
 | `cluster_id` | String | Required when one application uses multiple clusters; otherwise No | `1` | Unique identifier for a cluster. Connections with the same identifier share one topology monitor and cache; different clusters must use different identifiers. |
 | `enable_connect_failover` | Boolean | No | `false` | Enables cluster-aware failover when the initial connection fails because of a network exception. The initial connection may be redirected to another instance. |
@@ -164,8 +163,6 @@ In addition to parameters for the underlying database driver, configure the foll
 ### Host pattern
 
 When connecting through an IP address, CNAME, custom domain, or another endpoint that does not contain a recognizable RDS instance pattern, set `cluster_instance_host_pattern`. Use `?` as the placeholder for the DB instance identifier. For example, if instance endpoints follow `instanceIdentifier.customHost`, use `?.customHost` as the pattern. The wrapper uses this pattern to build per-instance endpoints while it discovers topology.
-
-For Aurora Global Databases, set `global_cluster_instance_host_patterns` to a comma-separated pattern for every region. For custom domains, prefix each pattern with the AWS region in square brackets, such as `[us-east-1]?.customHost,[us-west-1]?.anotherCustomHost`.
 
 :::warning
 When using a CNAME or custom domain, set both the instance host pattern and the cluster identifier. Without the pattern, topology discovery cannot construct resolvable per-instance hostnames.
@@ -213,16 +210,28 @@ Failover succeeded outside a transaction. Session state from the original connec
 
 ### TransactionStateUnknownError
 
-Failover happened inside a transaction. The wrapper attempts to roll back the old transaction, but the outcome may be unknown because the original connection can already be broken. Reuse and reconfigure the connection, restart the transaction, and replay all statements in it.
+Failover happened inside a transaction. The wrapper cannot tell whether the transaction completed, so the outcome must be treated as unknown. Reuse and reconfigure the connection, restart the transaction, and replay all statements in it.
+
 :::caution Do not dispose the connection on failover errors
-The wrapper establishes a new internal connection before raising the error. If you close or discard the connection object in a rescue block, you lose that ready-to-use connection. Check the error type first and reuse the connection when failover succeeded.
+The wrapper establishes a new internal connection before raising the error, and reuses the
+same connection object rather than replacing it. If you close or discard the connection
+object when handling the error, you lose that ready-to-use connection. Check the error type
+first and reuse the connection when failover succeeded.
 :::
 
-## Ruby-specific notes
+:::note Using the wrapper through ActiveRecord
+When you use the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`),
+reconnection is partially handled for you. On a successful failover the adapter
+re-runs `configure_connection` and reuses the pooled connection in place rather than
+discarding it, so you should not call `disconnect!` or discard the connection object
+yourself — the pool already holds the live, reconnected connection.
+:::
 
-Through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the adapter's
-`translate_exception` decides what your code actually rescues, and the outcome differs by
-error:
+## ActiveRecord integration
+
+When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the
+adapter's `translate_exception` decides what your code actually rescues, and the
+outcome differs by error:
 
 - **`FailoverSuccessError`** — failover succeeded outside a transaction. The adapter
   re-runs `configure_connection` and then re-raises this error **unchanged**, so your
@@ -232,20 +241,51 @@ error:
 - **`TransactionStateUnknownError`** — failover succeeded while a transaction was open.
   Handled the same way, and also re-raised unchanged. The transaction's outcome is
   genuinely unknown, so check before retrying anything that is not idempotent.
-- **`FailoverFailedError`** — failover could not reach a writer in time. Only this one is
-  translated, into `ActiveRecord::ConnectionFailed`, carrying the original error as its
-  message. In your logs it appears as a single wrapped line:
+- **`FailoverFailedError`** — failover could not reach a writer in time. Only this one
+  is translated, into `ActiveRecord::ConnectionFailed`, carrying the original error as
+  its message. In your logs it appears as a single wrapped line:
 
 ```text
 ActiveRecord::ConnectionFailed: AwsAdvancedRubyDriverWrapper::Errors::FailoverFailedError: Unable to connect to a writer instance
 ```
 
-Seeing `ActiveRecord::ConnectionFailed` therefore means failover **failed**, not that it
-succeeded. The adapter marks the connection broken, so `active?` returns `false` and
+Seeing `ActiveRecord::ConnectionFailed` therefore means failover **failed**, not that
+it succeeded. The adapter marks the connection broken, so `active?` returns `false` and
 ActiveRecord discards it and opens a fresh one on the next checkout. Do not rescue and
 discard the connection yourself.
 
-The AWS Advanced Ruby Driver Wrapper's `SessionStateService` tracks transaction and autocommit
-state but does not transfer every session setting across a failover. `configure_connection`
-restores what ActiveRecord itself configures; anything else your application depends on —
-search path, timezone, prepared statements — is yours to re-apply before replaying work.
+The AWS Advanced Ruby Driver Wrapper's `SessionStateService` tracks transaction and
+autocommit state but does not transfer every session setting across a failover.
+`configure_connection` restores what ActiveRecord itself configures; anything else your
+application depends on — search path, timezone, prepared statements — is yours to
+re-apply before replaying work.
+
+## Re-applying session state automatically after failover
+
+ActiveRecord runs its adapter's `configure_connection` step whenever it configures a
+connection — including immediately after a successful failover, because the adapter
+calls `configure_connection` while handling `FailoverSuccessError` and
+`TransactionStateUnknownError`. `configure_connection` applies the session variables you
+declare through the adapter's `variables:` option, so any `SET`-style session state
+listed there is re-applied to the new connection on failover without extra code:
+
+```yaml
+# config/database.yml
+production:
+  adapter: aws_postgresql
+  host: my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com
+  database: mydb
+  username: <username>
+  password: <password>
+  wrapper_plugins: failover
+  variables:
+    statement_timeout: 5000
+    timezone: "UTC"
+```
+
+Put the session settings your application relies on under `variables:`. Because the
+pooled connection object is preserved across failover (the adapter reconnects it in
+place rather than discarding it), and `configure_connection` re-runs on the new writer,
+those variables are restored automatically. Session state that is *not* expressed as a
+`variables:` entry — for example prepared statements, temporary tables, or advisory
+locks — is still yours to re-establish before replaying work.

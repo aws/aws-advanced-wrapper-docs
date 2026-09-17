@@ -122,7 +122,7 @@ gantt
 
 *Each instance monitor connects and checks its own role, so the monitor never depends on a reader's topology view. Instance-1 answers yes and reports `instance-1 (W), instance-2 (R), instance-3 (R)`. Instance-2 answers no and reports that the writer changed. Instance-3, the old writer, still reports `instance-3 (W)` — the stale reading the direct role check avoids. Relative time, not to scale.*
 
-This direct role check avoids relying solely on a reader's potentially stale role information. The monitor stops unnecessary instance probes after a writer is confirmed and continues topology updates at the high refresh rate while the cluster stabilizes.
+This direct role check avoids relying solely on a reader's potentially stale topology information. The monitor stops unnecessary instance probes after a writer is confirmed and continues topology updates at the high refresh rate while the cluster stabilizes.
 
 ## How to enable
 
@@ -147,15 +147,13 @@ In addition to parameters for the underlying database driver, configure the foll
 {% for p in params -%}
 {%- if p.availability is not defined or p.availability[wrapper_id] -%}
 {% set ptype = p.spellings[wrapper_id].type | default(p.type) -%}
-| `{{ p.spellings[wrapper_id].name }}` | {{ type_names[ptype][wrapper_id] }} | {{ p.spellings[wrapper_id].required | default('No') }} | {% if p.spellings[wrapper_id].default is defined %}`{{ p.spellings[wrapper_id].default }}`{% else %}{{ p.spellings[wrapper_id].defaultNote }}{% endif %} | {{ p.description[wrapper_id] }}{% if p.spellings[wrapper_id].unit %} *({{ p.spellings[wrapper_id].unit }})*{% endif %} |
+| `{{ p.spellings[wrapper_id].name }}` | {{ type_names[ptype][wrapper_id] }} | {{ p.spellings[wrapper_id].required | default('No') }} | {% if p.spellings[wrapper_id].default is defined %}`{{ p.spellings[wrapper_id].default }}`{% else %}{{ p.spellings[wrapper_id].defaultNote }}{% endif %} | {{ p.description[wrapper_id] }}{% if p.spellings[wrapper_id].unit %} *({% if p.spellings[wrapper_id].unit == 's' %}sec{% else %}{{ p.spellings[wrapper_id].unit }}{% endif %})*{% endif %} |
 {% endif -%}
 {%- endfor %}
 
 ### Host pattern
 
 When connecting through an IP address, CNAME, custom domain, or another endpoint that does not contain a recognizable RDS instance pattern, set `{{ enhanced.wrappers[wrapper_id].hostPatternParam }}`. Use `?` as the placeholder for the DB instance identifier. For example, if instance endpoints follow `instanceIdentifier.customHost`, use `?.customHost` as the pattern. The wrapper uses this pattern to build per-instance endpoints while it discovers topology.
-
-For Aurora Global Databases, set `{{ enhanced.wrappers[wrapper_id].globalPatternParam }}` to a comma-separated pattern for every region. For custom domains, prefix each pattern with the AWS region in square brackets, such as `[us-east-1]?.customHost,[us-west-1]?.anotherCustomHost`.
 
 :::warning
 When using a CNAME or custom domain, set both the instance host pattern and the cluster identifier. Without the pattern, topology discovery cannot construct resolvable per-instance hostnames.
@@ -183,55 +181,24 @@ a specific **error class**.
 {% for e in errors -%}
 | `{{ e[wrapper_id] }}` | {{ e.connectionValid }} | {{ e.reusable }} | {{ e.action }} |
 {% endfor %}
+{% for e in errors if e.detail and e.detail[wrapper_id] %}
 
-{% if wrapper_id == 'ruby' -%}
-### FailoverFailedError
+### {{ e[wrapper_id] }}
 
-The original connection failed, and the wrapper could not reconnect to a new instance before the failover attempt ended. Wait until the server is available, then reconnect.
-
-### FailoverSuccessError
-
-Failover succeeded outside a transaction. Session state from the original connection is lost. Reuse the connection, reconfigure its session state, and replay the statement that was interrupted.
-
-### TransactionStateUnknownError
-
-Failover happened inside a transaction. The wrapper attempts to roll back the old transaction, but the outcome may be unknown because the original connection can already be broken. Reuse and reconfigure the connection, restart the transaction, and replay all statements in it.
-{%- endif %}
+{{ e.detail[wrapper_id] }}
+{% endfor %}
 
 :::caution Do not dispose the connection on failover errors
-The wrapper establishes a new internal connection before raising the error. If you close or discard the connection object in a rescue block, you lose that ready-to-use connection. Check the error type first and reuse the connection when failover succeeded.
+The wrapper establishes a new internal connection before raising the error, and reuses the
+same connection object rather than replacing it. If you close or discard the connection
+object when handling the error, you lose that ready-to-use connection. Check the error type
+first and reuse the connection when failover succeeded.
 :::
+{% if third_party_note %}
 
-{% if wrapper_id == 'ruby' -%}
-## Ruby-specific notes
+{{ third_party_note.strip() }}
+{% endif %}
+{% for block in wrapper_only %}
 
-Through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the adapter's
-`translate_exception` decides what your code actually rescues, and the outcome differs by
-error:
-
-- **`FailoverSuccessError`** — failover succeeded outside a transaction. The adapter
-  re-runs `configure_connection` and then re-raises this error **unchanged**, so your
-  `rescue` sees `AwsAdvancedRubyDriverWrapper::Errors::FailoverSuccessError`, not an
-  ActiveRecord error. The connection is live and pointed at the new writer; replay the
-  work.
-- **`TransactionStateUnknownError`** — failover succeeded while a transaction was open.
-  Handled the same way, and also re-raised unchanged. The transaction's outcome is
-  genuinely unknown, so check before retrying anything that is not idempotent.
-- **`FailoverFailedError`** — failover could not reach a writer in time. Only this one is
-  translated, into `ActiveRecord::ConnectionFailed`, carrying the original error as its
-  message. In your logs it appears as a single wrapped line:
-
-```text
-ActiveRecord::ConnectionFailed: AwsAdvancedRubyDriverWrapper::Errors::FailoverFailedError: Unable to connect to a writer instance
-```
-
-Seeing `ActiveRecord::ConnectionFailed` therefore means failover **failed**, not that it
-succeeded. The adapter marks the connection broken, so `active?` returns `false` and
-ActiveRecord discards it and opens a fresh one on the next checkout. Do not rescue and
-discard the connection yourself.
-
-The {{ wrapper.wrapperName }}'s `SessionStateService` tracks transaction and autocommit
-state but does not transfer every session setting across a failover. `configure_connection`
-restores what ActiveRecord itself configures; anything else your application depends on —
-search path, timezone, prepared statements — is yours to re-apply before replaying work.
-{%- endif %}
+{{ block.strip() }}
+{% endfor %}

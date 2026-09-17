@@ -18,6 +18,9 @@ flowchart LR
     c0["Plugin A"] -->|"connect"| c1
     c1["Plugin B"] -->|"connect"| c2
     c2["Default Plugin"]
+    c2 -.->|result| c1
+    c1 -.->|result| c0
+    c0 -.->|result| pm
   end
 
   subgraph execute["Execute pipeline"]
@@ -26,8 +29,13 @@ flowchart LR
     e0["Plugin A"] -->|"execute"| e1
     e1["Plugin B"] -->|"execute"| e2
     e2["Default Plugin"]
+    e2 -.->|result| e1
+    e1 -.->|result| e0
+    e0 -.->|result| pm
   end
 ```
+
+The dashed **result** arrows show the return path: once `Default Plugin` does the underlying work, the result travels back out through each plugin, so a plugin can also run logic after the next plugin returns.
 
 A plugin pipeline is an execution workflow achieving a specific goal.
 
@@ -55,7 +63,7 @@ The internal_connect pipeline opens a connection for the wrapper's own internal 
 
 ## Execute Pipeline
 
-The execute pipeline performs additional work for Ruby method calls. This pipeline is not limited to query execution methods, it may be called for any methods such as `setTimeout` or `isValid`.
+The execute pipeline performs additional work for Ruby method calls. This pipeline is not limited to query execution methods, it may be called for any subscribed method — for example connection utility methods such as `ping` or `escape`.
 
 Usages for this pipeline include:
 
@@ -67,8 +75,12 @@ Usages for this pipeline include:
 
 ## Release Resources / Shutdown
 
-The AWS Advanced Ruby Driver Wrapper performs graceful shutdown through the `ShutdownService`
-(a singleton) plus `at_exit` and `TERM`/`INT` signal traps installed in
-`lib/aws_advanced_ruby_driver_wrapper.rb`. `release_resources` shuts down
-the shared `MonitorService`, releases the `EventPublisher`, and clears
-caches. Long-lived plugins/monitors register themselves as shutdown targets.
+The AWS Advanced Ruby Driver Wrapper performs graceful teardown through
+`AwsAdvancedRubyDriverWrapper.release_resources`, invoked automatically by an
+`at_exit` hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`.
+`TERM`/`INT` signal traps simply call `exit`, so the real teardown always runs
+from the `at_exit` hook (acquiring locks or joining threads inside a signal-trap
+context is unsafe in Ruby and can deadlock). `release_resources` shuts down the
+shared `MonitorService`, releases the `EventPublisher`'s background thread, and
+clears the wrapper's caches. It is safe to call more than once, so you may also
+invoke it directly for a deterministic shutdown.

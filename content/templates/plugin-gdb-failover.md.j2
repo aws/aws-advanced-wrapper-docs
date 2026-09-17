@@ -13,21 +13,52 @@ Version {{ plugin.availableSince }}
 flowchart TB
   App[User Application] --> Plugin[Global Database Failover Plugin]
 
-  subgraph HOME[Home region]
-    HW[(Writer)]
-    HR[(Reader)]
+  %% Scene 1 — initial topology: the home region is the primary, so it holds the single writer.
+  subgraph INIT["Initial state — primary is the home region"]
+    direction LR
+    subgraph IH[Home region]
+      IHW[(Writer)]
+      IHR[(Reader)]
+    end
+    subgraph IO[Other region]
+      IOR1[(Reader)]
+      IOR2[(Reader)]
+    end
   end
 
-  subgraph OOH[Other region]
-    OW[(Writer)]
-    OR[(Reader)]
+  Plugin --> INIT
+
+  %% Two conditions the plugin distinguishes at failover time. Only one region is
+  %% ever the primary/writer, so exactly one of these applies.
+  INIT -->|"primary is still the home region"| INHOME
+  INIT -->|"primary has moved to another region"| OUTHOME
+
+  subgraph INHOME["in-home mode result"]
+    direction LR
+    subgraph IH2[Home region · primary]
+      IH2W[(Writer)]
+      IH2R[(Reader)]
+    end
+    subgraph IO2[Other region · secondary]
+      IO2R1[(Reader)]
+      IO2R2[(Reader)]
+    end
   end
 
-  Plugin -->|in-home mode: primary is in the home region| HOME
-  Plugin -.->|out-of-home mode: primary moved to another region| OOH
+  subgraph OUTHOME["out-of-home mode result"]
+    direction LR
+    subgraph IH3[Home region · secondary]
+      IH3R1[(Reader)]
+      IH3R2[(Reader)]
+    end
+    subgraph IO3[Other region · primary]
+      IO3W[(Writer)]
+      IO3R[(Reader)]
+    end
+  end
 ```
 
-*The plugin compares the Global Database's current primary region with the configured home region. While they match, the **in-home** mode selects the failover target; once the primary moves to another region, the **out-of-home** mode applies instead.*
+*There is only ever one writer — the cluster in the current primary region. The plugin compares the Global Database's current primary region with the configured home region. While the primary is still the home region, the **in-home** mode selects the failover target; once the primary moves to another region, the primary/writer relocates there and the **out-of-home** mode applies instead. Each mode chooses whether to reconnect to that writer or to a reader (in the home or another region), according to its configured value.*
 
 ## How to enable
 

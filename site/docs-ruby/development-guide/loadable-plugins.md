@@ -15,11 +15,11 @@ Plugins let users:
 - measure execution time
 - and more
 
-The AWS Advanced Ruby Driver Wrapper has several built-in plugins; you can [see the list here](../../).
+The AWS Advanced Ruby Driver Wrapper has several built-in plugins; you can see and navigate through them under **Using Plugins** in the left sidebar.
 
 ## Available Services
 
-Plugins are notified by the plugin manager when changes to the database connection occur, and utilize the [service container](./service-container) to establish connections and retrieve host information.
+Plugins are invoked by the plugin manager through the pipelines for the methods they subscribe to, and utilize the [service container](./service-container) to establish connections and retrieve host information.
 
 ### Creating a Custom Plugin
 

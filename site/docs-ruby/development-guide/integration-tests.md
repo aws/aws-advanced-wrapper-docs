@@ -38,7 +38,7 @@ If the environment variable `REUSE_RDS_DB` is set to true, the integration tests
 | `DB_PASSWORD`             | Yes      | The database cluster password.                                                                             | `password`                                    |
 | `DB_DATABASE_NAME`        | No       | Name of the database that will be used by the tests. The default database name is test.                    | `test_db_name`                                |
 | `RDS_DB_NAME`             | Yes      | The database identifier for your Aurora or RDS cluster. Must be a unique value to avoid conflicts.          | `db-identifier`                               |
-| `RDS_DB_DOMAIN`           | No       | The existing database connection suffix. Use this variable to run against an existing database.            | `xyz.us-east-1.rds.amazonaws.com`             |
+| `RDS_DB_DOMAIN`           | If running against an existing database, yes; otherwise, no.       | The existing database connection suffix. Use this variable to run against an existing database.            | `xyz.us-east-1.rds.amazonaws.com`             |
 | `IAM_USER`                | No       | User within the database that is identified for AWS IAM Authentication.                                    | `example_user_name`                           |
 | `AWS_ACCESS_KEY_ID`       | Yes      | An AWS access key associated with an IAM user or role with RDS permissions.                                | `ABCDEFGH12345EXAMPLE`                        |
 | `AWS_SECRET_ACCESS_KEY`   | Yes      | The secret key associated with the provided AWS_ACCESS_KEY_ID.                                             | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`    |

@@ -208,6 +208,24 @@
   border-color: var(--ifm-color-primary);
 }
 
+/* Circular indicator for single-select (radio) controls. */
+.radioMark {
+  border-radius: 50%;
+}
+
+/* When a radio is on, show a filled dot rather than a check glyph.
+   The dot is drawn with an inner box-shadow so it stays centered. */
+.optionItemOn .radioMark {
+  background: var(--ifm-background-color);
+  border-color: var(--ifm-color-primary);
+  box-shadow: inset 0 0 0 4px var(--ifm-color-primary);
+}
+
+/* Square indicator for multi-select (checkbox) controls (default shape). */
+.checkboxMark {
+  border-radius: 4px;
+}
+
 .optionText {
   display: flex;
   flex-direction: column;

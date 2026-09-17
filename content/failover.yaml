@@ -205,16 +205,22 @@ errors:
     connectionValid: "No"
     reusable: "No"
     action: "Failover could not find a new instance. Wait until the server is available, then reconnect."
+    detail:
+      ruby: "The original connection failed, and the wrapper could not reconnect to a new instance before the failover attempt ended. Wait until the server is available, then reconnect."
   - concept: failoverSuccess
     ruby: "FailoverSuccessError"
     connectionValid: "Yes"
     reusable: "Yes"
     action: "Failover succeeded outside a transaction. Reconfigure session state, then replay the last statement."
+    detail:
+      ruby: "Failover succeeded outside a transaction. Session state from the original connection is lost. Reuse the connection, reconfigure its session state, and replay the statement that was interrupted."
   - concept: transactionResolutionUnknown
     ruby: "TransactionStateUnknownError"
     connectionValid: "Yes"
     reusable: "Yes"
     action: "Failover happened inside a transaction. Reconfigure session state, restart the transaction, replay all its statements."
+    detail:
+      ruby: "Failover happened inside a transaction. The wrapper cannot tell whether the transaction completed, so the outcome must be treated as unknown. Reuse and reconfigure the connection, restart the transaction, and replay all statements in it."
 
 wrapperOnly:
   ruby:
@@ -262,7 +268,6 @@ enhanced:
       clusterIdParam: cluster_id
       availableSince: "1.0.0 (default plugin)"
       hostPatternParam: cluster_instance_host_pattern
-      globalPatternParam: global_cluster_instance_host_patterns
       monitoringPrefix: "topology_monitoring_"
       connectSnippet: |
         require 'aws_advanced_ruby_driver_wrapper/postgresql'
@@ -306,16 +311,6 @@ enhanced:
           defaultNote: "auto-derived for recognizable RDS endpoints"
       description:
         ruby: "Pattern used to build instance endpoints when the connection host is not a recognizable RDS endpoint. Use `?` as the instance identifier placeholder."
-    - concept: globalClusterInstanceHostPatterns
-      type: string
-      availability: { ruby: true }
-      spellings:
-        ruby:
-          name: global_cluster_instance_host_patterns
-          required: "Required for Aurora Global Databases; otherwise ignored"
-          defaultNote: "none"
-      description:
-        ruby: "Comma-separated instance host patterns for every global database region. Prefix custom-domain patterns with `[region]`."
     - concept: clusterTopologyRefreshRate
       type: integer
       unitTrap: true
@@ -357,9 +352,83 @@ enhanced:
       description:
         ruby: "Enables cluster-aware failover when the initial connection fails because of a network exception. The initial connection may be redirected to another instance."
 
+  # Optional, per-wrapper. Rendered right after the "Do not dispose the connection"
+  # caution, where third-party/ORM reconnection behavior is relevant. When a wrapper is
+  # used through a third-party provider (e.g. an ORM) the reconnection can be partially
+  # handled or behave differently, so this note explains that. Omit for wrappers that
+  # have nothing to add.
+  thirdPartyNote:
+    ruby: |
+      :::note Using the wrapper through ActiveRecord
+      When you use the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`),
+      reconnection is partially handled for you. On a successful failover the adapter
+      re-runs `configure_connection` and reuses the pooled connection in place rather than
+      discarding it, so you should not call `disconnect!` or discard the connection object
+      yourself — the pool already holds the live, reconnected connection.
+      :::
+
   wrapperOnly:
     ruby:
       - |
-        ### ActiveRecord integration
+        ## ActiveRecord integration
 
-        When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), only one failover error is translated. `FailoverSuccessError` and `TransactionStateUnknownError` are re-raised unchanged after the adapter re-runs `configure_connection`, so your `rescue` sees the wrapper error itself and the connection is live on the new writer. `FailoverFailedError` becomes `ActiveRecord::ConnectionFailed`, carrying the original error as its message — so that ActiveRecord error means failover **failed**, and the connection is marked broken and replaced on the next checkout. Do not rescue and discard the connection yourself.
+        When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the
+        adapter's `translate_exception` decides what your code actually rescues, and the
+        outcome differs by error:
+
+        - **`FailoverSuccessError`** — failover succeeded outside a transaction. The adapter
+          re-runs `configure_connection` and then re-raises this error **unchanged**, so your
+          `rescue` sees `AwsAdvancedRubyDriverWrapper::Errors::FailoverSuccessError`, not an
+          ActiveRecord error. The connection is live and pointed at the new writer; replay the
+          work.
+        - **`TransactionStateUnknownError`** — failover succeeded while a transaction was open.
+          Handled the same way, and also re-raised unchanged. The transaction's outcome is
+          genuinely unknown, so check before retrying anything that is not idempotent.
+        - **`FailoverFailedError`** — failover could not reach a writer in time. Only this one
+          is translated, into `ActiveRecord::ConnectionFailed`, carrying the original error as
+          its message. In your logs it appears as a single wrapped line:
+
+        ```text
+        ActiveRecord::ConnectionFailed: AwsAdvancedRubyDriverWrapper::Errors::FailoverFailedError: Unable to connect to a writer instance
+        ```
+
+        Seeing `ActiveRecord::ConnectionFailed` therefore means failover **failed**, not that
+        it succeeded. The adapter marks the connection broken, so `active?` returns `false` and
+        ActiveRecord discards it and opens a fresh one on the next checkout. Do not rescue and
+        discard the connection yourself.
+
+        The AWS Advanced Ruby Driver Wrapper's `SessionStateService` tracks transaction and
+        autocommit state but does not transfer every session setting across a failover.
+        `configure_connection` restores what ActiveRecord itself configures; anything else your
+        application depends on — search path, timezone, prepared statements — is yours to
+        re-apply before replaying work.
+      - |
+        ## Re-applying session state automatically after failover
+
+        ActiveRecord runs its adapter's `configure_connection` step whenever it configures a
+        connection — including immediately after a successful failover, because the adapter
+        calls `configure_connection` while handling `FailoverSuccessError` and
+        `TransactionStateUnknownError`. `configure_connection` applies the session variables you
+        declare through the adapter's `variables:` option, so any `SET`-style session state
+        listed there is re-applied to the new connection on failover without extra code:
+
+        ```yaml
+        # config/database.yml
+        production:
+          adapter: aws_postgresql
+          host: my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com
+          database: mydb
+          username: <username>
+          password: <password>
+          wrapper_plugins: failover
+          variables:
+            statement_timeout: 5000
+            timezone: "UTC"
+        ```
+
+        Put the session settings your application relies on under `variables:`. Because the
+        pooled connection object is preserved across failover (the adapter reconnects it in
+        place rather than discarding it), and `configure_connection` re-runs on the new writer,
+        those variables are restored automatically. Session state that is *not* expressed as a
+        `variables:` entry — for example prepared statements, temporary tables, or advisory
+        locks — is still yours to re-establish before replaying work.

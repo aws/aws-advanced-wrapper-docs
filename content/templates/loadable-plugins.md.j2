@@ -16,11 +16,11 @@ Plugins let users:
 - measure execution time
 - and more
 
-The {{ dg.productName }} has several built-in plugins; you can [see the list here]({{ dg.availablePluginsLink }}).
+The {{ dg.productName }} has several built-in plugins; you can see and navigate through them under **Using Plugins** in the left sidebar.
 
 ## Available Services
 
-Plugins are notified by the {{ dg.pluginManagerShort }} when changes to the database connection occur, and utilize the [service container](./service-container) to establish connections and retrieve host information.
+Plugins are invoked by the {{ dg.pluginManagerShort }} through the pipelines for the methods they subscribe to, and utilize the [service container](./service-container) to establish connections and retrieve host information.
 {% if dg_only %}
 
 {{ dg_only.strip() }}

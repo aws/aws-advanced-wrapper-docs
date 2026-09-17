@@ -237,8 +237,10 @@ Plugins should not track host information themselves. Instead, the service conta
 
 The AWS Advanced Ruby Driver Wrapper has two host list providers, the `ConnectionStringHostListProvider` and the `RdsHostListProvider`.
 
-The `RdsHostListProvider` provides information about the Aurora cluster. It uses the current connection to track the available hosts and their roles in the cluster.
+The `RdsHostListProvider` provides information about the Aurora cluster. It uses an internal monitoring connection to track the available hosts and their roles in the cluster.
 
 The `ConnectionStringHostListProvider` is a static host list provider, whereas the `RdsHostListProvider` is a dynamic host list provider. A static host list provider will fetch the host list during initialization and does not update the host list afterwards, whereas a dynamic host list provider will update the host list information based on database status.
 
-The `ConnectionStringHostListProvider` is the default provider for non-cluster URLs; `RdsHostListProvider` is used for Aurora/RDS cluster URLs and lazily starts a `ClusterTopologyMonitor` (via the shared `MonitorService`) that caches topology in the `StorageService`.
+Which provider is used is decided by the resolved [database dialect](./architecture), not by the raw URL. The `ConnectionStringHostListProvider` is used for non-cluster dialects (plain PostgreSQL/MySQL), whereas the `RdsHostListProvider` is used for the Aurora and RDS Multi-AZ cluster dialects; it lazily starts a `ClusterTopologyMonitor` (via the shared `MonitorService`) that caches topology in the `StorageService`.
+
+Because the dialect is refined after the first connection, connecting to an **instance** endpoint of an Aurora or Multi-AZ cluster starts out on the `ConnectionStringHostListProvider` and is then upgraded to the `RdsHostListProvider` once the wrapper queries the server and detects the cluster dialect on that first connect. To skip that detection step and use the `RdsHostListProvider` immediately, set the database dialect explicitly (for example `wrapper_dialect: aurora-pg`, `aurora-mysql`, or the Multi-AZ dialect).

@@ -24,21 +24,52 @@ Version 1.0.0
 flowchart TB
   App[User Application] --> Plugin[Global Database Failover Plugin]
 
-  subgraph HOME[Home region]
-    HW[(Writer)]
-    HR[(Reader)]
+  %% Scene 1 — initial topology: the home region is the primary, so it holds the single writer.
+  subgraph INIT["Initial state — primary is the home region"]
+    direction LR
+    subgraph IH[Home region]
+      IHW[(Writer)]
+      IHR[(Reader)]
+    end
+    subgraph IO[Other region]
+      IOR1[(Reader)]
+      IOR2[(Reader)]
+    end
   end
 
-  subgraph OOH[Other region]
-    OW[(Writer)]
-    OR[(Reader)]
+  Plugin --> INIT
+
+  %% Two conditions the plugin distinguishes at failover time. Only one region is
+  %% ever the primary/writer, so exactly one of these applies.
+  INIT -->|"primary is still the home region"| INHOME
+  INIT -->|"primary has moved to another region"| OUTHOME
+
+  subgraph INHOME["in-home mode result"]
+    direction LR
+    subgraph IH2[Home region · primary]
+      IH2W[(Writer)]
+      IH2R[(Reader)]
+    end
+    subgraph IO2[Other region · secondary]
+      IO2R1[(Reader)]
+      IO2R2[(Reader)]
+    end
   end
 
-  Plugin -->|in-home mode: primary is in the home region| HOME
-  Plugin -.->|out-of-home mode: primary moved to another region| OOH
+  subgraph OUTHOME["out-of-home mode result"]
+    direction LR
+    subgraph IH3[Home region · secondary]
+      IH3R1[(Reader)]
+      IH3R2[(Reader)]
+    end
+    subgraph IO3[Other region · primary]
+      IO3W[(Writer)]
+      IO3R[(Reader)]
+    end
+  end
 ```
 
-*The plugin compares the Global Database's current primary region with the configured home region. While they match, the **in-home** mode selects the failover target; once the primary moves to another region, the **out-of-home** mode applies instead.*
+*There is only ever one writer — the cluster in the current primary region. The plugin compares the Global Database's current primary region with the configured home region. While the primary is still the home region, the **in-home** mode selects the failover target; once the primary moves to another region, the primary/writer relocates there and the **out-of-home** mode applies instead. Each mode chooses whether to reconnect to that writer or to a reader (in the home or another region), according to its configured value.*
 
 ## How to enable
 
@@ -63,13 +94,12 @@ Only one failover plugin may be enabled per connection. Do not use `gdb_failover
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `failover_home_region` | String | Yes for endpoints with no region; otherwise No | parsed from URL | The AWS region the application runs in. Determines which of the in-home and out-of-home modes applies. Defaults to the region parsed from the connection endpoint, and is required when the endpoint carries no region (a Global Database endpoint, an IP address, or a custom domain).<br/><br/>Example: `us-west-1` |
-| `in_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`.<br/><br/>Example: `strict_writer` |
-| `out_of_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is not** the home region. Accepts the same values as the in-home mode.<br/><br/>Example: `strict_any_reader` |
+| `in_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`. When unset, the mode is derived from the initial connection endpoint: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`.<br/><br/>Example: `strict_writer` |
+| `out_of_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is not** the home region. Accepts the same values as the in-home mode. When unset, it is derived from the initial endpoint the same way as the in-home mode: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`.<br/><br/>Example: `strict_any_reader` |
 | `global_cluster_instance_host_patterns` | String | Yes for Global Databases; otherwise No | none | Comma-separated instance host patterns for every Global Database region. Prefix custom-domain patterns with `[region]`. Required for Aurora Global Databases; ignored otherwise.<br/><br/>Example: `?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com` |
-| `cluster_instance_host_pattern` | String | Yes for IP/custom domains; otherwise No | auto-derived | DNS pattern used to build instance endpoints when the connection host is not a recognizable RDS endpoint. Use `?` as the instance identifier placeholder.<br/><br/>Example: `?.customHost` |
 | `accessible_regions` | String | No | all regions | Comma-separated list of AWS regions the application can reach. When set, failover and topology monitoring only consider nodes in these regions. If the home region is also set, it must be included.<br/><br/>Example: `us-east-1,us-west-1` |
-| `failover_timeout_sec` | Float | No | `300.0` | Maximum allowed time to attempt reconnecting to a new writer or reader instance after a cluster failover is initiated. *(s)*<br/><br/>Example: `300.0` |
-| `cluster_topology_refresh_rate_sec` | Float | No | `5.0` | Cluster topology refresh rate while the cluster is not in failover (the regular slow monitoring rate). *(s)*<br/><br/>Example: `5.0` |
+| `failover_timeout_sec` | Float | No | `300.0` | Maximum allowed time to attempt reconnecting to a new writer or reader instance after a cluster failover is initiated. *(sec)*<br/><br/>Example: `300.0` |
+| `cluster_topology_refresh_rate_sec` | Float | No | `5.0` | Cluster topology refresh rate while the cluster is not in failover (the regular slow monitoring rate). *(sec)*<br/><br/>Example: `5.0` |
 | `failover_reader_host_selector_strategy` | String | No | `random` | Strategy used to select a reader node during failover. See [host selection strategies](../host-selection-strategies) for the available values.<br/><br/>Example: `random` |
 
 ## Configuration examples

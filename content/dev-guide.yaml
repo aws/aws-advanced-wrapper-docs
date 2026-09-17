@@ -52,6 +52,9 @@ wrappers:
     componentCount: 5
     methodTerm: "Ruby method calls"
     methodTermSingular: "Ruby method call"
+    # Example non-query methods that still flow through the execute pipeline, rendered
+    # inline in the Pipelines page. Each wrapper supplies its own driver-specific methods.
+    utilityMethodExamples: "`ping` or `escape`"
     connectionObject: "wrapper connection"
     connectionShort: "connection"
     pluginConfigParam: "`wrapper_plugins` connection parameter"
@@ -74,7 +77,6 @@ wrappers:
     hostSpecByStrategyName: "select_host"
     acceptsStrategyName: "accepts_strategy"
 
-    availablePluginsLink: "../../"
     subscribedMethodsIntro: |
       Each plugin defines a `subscribed_methods` attribute — a `Set` of method-name strings (or `Set['*']` for all methods). All plugins must define `subscribed_methods`.
 
@@ -114,7 +116,7 @@ wrappers:
       | `DB_PASSWORD`             | Yes      | The database cluster password.                                                                             | `password`                                    |
       | `DB_DATABASE_NAME`        | No       | Name of the database that will be used by the tests. The default database name is test.                    | `test_db_name`                                |
       | `RDS_DB_NAME`             | Yes      | The database identifier for your Aurora or RDS cluster. Must be a unique value to avoid conflicts.          | `db-identifier`                               |
-      | `RDS_DB_DOMAIN`           | No       | The existing database connection suffix. Use this variable to run against an existing database.            | `xyz.us-east-1.rds.amazonaws.com`             |
+      | `RDS_DB_DOMAIN`           | If running against an existing database, yes; otherwise, no.       | The existing database connection suffix. Use this variable to run against an existing database.            | `xyz.us-east-1.rds.amazonaws.com`             |
       | `IAM_USER`                | No       | User within the database that is identified for AWS IAM Authentication.                                    | `example_user_name`                           |
       | `AWS_ACCESS_KEY_ID`       | Yes      | An AWS access key associated with an IAM user or role with RDS permissions.                                | `ABCDEFGH12345EXAMPLE`                        |
       | `AWS_SECRET_ACCESS_KEY`   | Yes      | The secret key associated with the provided AWS_ACCESS_KEY_ID.                                             | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`    |
@@ -212,7 +214,9 @@ wrappers:
       :::
     # Rendered as the last paragraph of the Host List Providers section.
     hostListProviderNotes: |
-      The `ConnectionStringHostListProvider` is the default provider for non-cluster URLs; `RdsHostListProvider` is used for Aurora/RDS cluster URLs and lazily starts a `ClusterTopologyMonitor` (via the shared `MonitorService`) that caches topology in the `StorageService`.
+      Which provider is used is decided by the resolved [database dialect](./architecture), not by the raw URL. The `ConnectionStringHostListProvider` is used for non-cluster dialects (plain PostgreSQL/MySQL), whereas the `RdsHostListProvider` is used for the Aurora and RDS Multi-AZ cluster dialects; it lazily starts a `ClusterTopologyMonitor` (via the shared `MonitorService`) that caches topology in the `StorageService`.
+
+      Because the dialect is refined after the first connection, connecting to an **instance** endpoint of an Aurora or Multi-AZ cluster starts out on the `ConnectionStringHostListProvider` and is then upgraded to the `RdsHostListProvider` once the wrapper queries the server and detects the cluster dialect on that first connect. To skip that detection step and use the `RdsHostListProvider` immediately, set the database dialect explicitly (for example `wrapper_dialect: aurora-pg`, `aurora-mysql`, or the Multi-AZ dialect).
     services:
       - name: "Connection Service"
         short: "Connection Service"
@@ -341,11 +345,15 @@ wrapperOnly:
     ruby: |
       ## Release Resources / Shutdown
 
-      The AWS Advanced Ruby Driver Wrapper performs graceful shutdown through the `ShutdownService`
-      (a singleton) plus `at_exit` and `TERM`/`INT` signal traps installed in
-      `lib/aws_advanced_ruby_driver_wrapper.rb`. `release_resources` shuts down
-      the shared `MonitorService`, releases the `EventPublisher`, and clears
-      caches. Long-lived plugins/monitors register themselves as shutdown targets.
+      The AWS Advanced Ruby Driver Wrapper performs graceful teardown through
+      `AwsAdvancedRubyDriverWrapper.release_resources`, invoked automatically by an
+      `at_exit` hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`.
+      `TERM`/`INT` signal traps simply call `exit`, so the real teardown always runs
+      from the `at_exit` hook (acquiring locks or joining threads inside a signal-trap
+      context is unsafe in Ruby and can deadlock). `release_resources` shuts down the
+      shared `MonitorService`, releases the `EventPublisher`'s background thread, and
+      clears the wrapper's caches. It is safe to call more than once, so you may also
+      invoke it directly for a deterministic shutdown.
 
   loadable-plugins:
     ruby: |

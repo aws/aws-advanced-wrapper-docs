@@ -22,6 +22,9 @@ const config = {
   markdown: { mermaid: true },
   themes: ['@docusaurus/theme-mermaid'],
 
+  // Re-applies #hash scrolling after Mermaid SVGs render (fresh loads / pasted URLs).
+  clientModules: [require.resolve('./src/clientModules/hashScroll.js')],
+
   i18n: { defaultLocale: 'en', locales: ['en'] },
 
   presets: [

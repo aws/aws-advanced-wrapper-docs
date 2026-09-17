@@ -234,11 +234,11 @@ questions:
 
   - id: read_owner
     title: Who decides that a unit of work is a read?
+    number: "2b"
     showIf: { data_role: [mixed] }
     body: >
-      Only reachable when reads and writes share one connection, because that is
-      the only shape where anything has a choice to make. Nothing in the wrapper
-      routes reads for you in any mode, so this asks who does.
+      The wrapper does not route reads for you in any mode, so this asks how your
+      application chooses between the reader and the writer.
     options:
       - id: nobody
         label: Nobody — keep everything on the primary
@@ -316,6 +316,9 @@ questions:
       - id: instance
         label: One database machine dying must not take my app down
         short: survives instance loss
+        blockedIf:
+          - when: { deployment: [multi_az_instance, instance, community, custom_domain] }
+            reason: failoverNeedsCluster
         hint: >
           The most common real requirement. An in-flight request can still fail
           once, but the application recovers by itself in seconds.
@@ -328,6 +331,9 @@ questions:
       - id: region
         label: An entire AWS region becoming unavailable must not take my app down
         short: survives region loss
+        blockedIf:
+          - when: { deployment: [cluster, cluster_custom, cluster_readonly, multi_az_cluster, multi_az_instance, instance, proxy, community, custom_domain] }
+            reason: regionNeedsGlobal
         hint: >
           A business-continuity requirement. Includes the rung above, and needs a
           global database, which is provisioning rather than configuration.
@@ -372,11 +378,11 @@ rules:
     emit:
       plugins: [initial_connection]
       notes:
-        - "The initial connection plugin resolves the cluster endpoint to a specific instance when connecting, so a new connection made right after a failover does not land on the machine that used to be the primary."
+        - "The initial connection plugin is listed here because it is helpful for this deployment: it resolves the cluster endpoint to a specific instance at connect time (so a new connection made right after a failover does not land on the machine that used to be the primary) and distributes connections across the cluster's instances. It is a default plugin as of v1.0.0 precisely because it is helpful in the common cluster case; it is listed explicitly so the configuration is self-describing."
   - when: { deployment: [cluster_custom] }
     emit:
       notes:
-        - "The initial connection plugin is not added for a custom endpoint: it is incompatible with the Aurora custom endpoint URL type."
+        - "The initial connection plugin is not recommended for a custom endpoint: it is incompatible with the Aurora custom endpoint URL type, so it is left out of this configuration even though it is a default plugin."
 
   # --- deployments the wrapper cannot discover on its own
   - when: { deployment: [proxy] }
@@ -384,7 +390,7 @@ rules:
       params: { cluster_id: "<a-name-you-choose>" }
       dropPlugins: [initial_connection, failover]
       notes:
-        - "Behind a proxy there is no cluster endpoint to resolve, so the initial connection plugin is dropped and the cluster needs a name of your choosing instead."
+        - "Behind a proxy there is no cluster endpoint to resolve, so the initial connection plugin — though a default — is removed here because it is not applicable; the cluster needs a name of your choosing instead."
         - "RDS Proxy performs its own failover and the failover plugin rejects proxy endpoints, so the failover plugin is dropped here. Surviving instance loss is handled by the proxy itself rather than by the wrapper."
       links: [rds_proxy]
   - when: { deployment: [custom_domain] }
@@ -450,13 +456,13 @@ addons:
           plugins: [iam]
           params: { iam_region: "<your-region>" }
           notes:
-            - "Tokens are cached for iam_expiration seconds, 870.0 by default, which sits just under the 15-minute token lifetime."
+            - "Tokens are cached for `iam_expiration_sec` seconds (default `870.0`), which sits just under the 15-minute token lifetime."
           assumes:
             - "IAM authentication is enabled on the cluster and the database user is mapped to an IAM role."
           links: [rds_iam, rds_ca_bundle]
       - id: secrets
         label: A central secret store
-        short: Secrets Manager
+        short: secrets auth selected
         blockedIf:
           - when: { deployment: [community] }
             reason: awsAuthNeedsRds
@@ -467,7 +473,7 @@ addons:
             secret_id: "<secret-name-or-arn>"
             secret_region: "<your-region>"
           notes:
-            - "The secret is re-read when authentication fails, so a rotation does not need a deploy."
+            - "The secret is re-read when authentication fails, so a rotation does not need a deploy. Cached credentials otherwise refresh every `secret_expiration_sec` seconds (default `870.0`)."
 
   - id: detection
     title: Noticing a dead database
@@ -512,7 +518,7 @@ addons:
         emit:
           pool: { max_age: 900 }
           notes:
-            - "Worth setting whenever credentials expire, so that no pooled connection outlives the token that opened it."
+            - "Worth setting whenever credentials expire, so that no pooled connection outlives the token that opened it. Set it with the Active Record `max_age` pool key (shown in the emitted config)."
       - id: idle
         label: Close idle connections sooner
         short: idle timeout
@@ -557,7 +563,7 @@ addons:
       - when: { deployment: [community] }
         reason: bgUnsupportedCommunity
     body: >
-      Additive, and not a rung on the continuity question — it is a plugin you add
+      Additive, and independent of what you chose for **What must keep working?** — it is a plugin you add
       to whichever configuration you land on.
     emit:
       plugins: [bg]
@@ -764,7 +770,7 @@ outcomes:
 # Standing caveats, always shown with the result.
 # -----------------------------------------------------------------------------
 alwaysTraps:
-  - "Nothing here balances load across replicas. Active Record does not do it, and the wrapper has no plugin for it — the reader endpoint is what spreads connections."
+  - "Active Record does not balance individual queries across replicas — a connection stays on whichever reader it opened. Connections are spread across readers by the reader endpoint, and, when the `initial_connection` plugin is enabled against a reader endpoint, by its `initial_connection_host_selector_strategy` (default `random`)."
   - "Verify the emitted configuration against a test cluster before production. Placeholders in angle brackets are yours to fill in."
 
 # -----------------------------------------------------------------------------
@@ -806,7 +812,7 @@ labels:
 pluginRationale:
   failover: Detects that the cluster promoted a different instance and reconnects to it.
   gdb_failover: Follows the write path to another region when the home region is unavailable.
-  initial_connection: Resolves the cluster endpoint to a specific instance when a connection opens.
+  initial_connection: Resolves the cluster endpoint to a specific instance when a connection opens, and distributes connections across the cluster; a default plugin because it is helpful in the common cluster case.
   custom_endpoint: Tracks which instances a custom endpoint currently contains.
   iam: Generates and caches a short-lived IAM token in place of a password.
   secrets_manager: Fetches credentials from Secrets Manager and re-reads them after a rotation.

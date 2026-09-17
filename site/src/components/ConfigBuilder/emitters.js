@@ -13,7 +13,26 @@
 const PLACEHOLDER_HOST = {
   cluster: 'my-cluster.cluster-abc123.us-east-1.rds.amazonaws.com',
   reader: 'my-cluster.cluster-ro-abc123.us-east-1.rds.amazonaws.com',
+  global: 'my-global-db.global-abc123.global.rds.amazonaws.com',
 };
+
+/** The writer/reader host placeholder for a deployment. A global database uses
+ * its own global endpoint; everything else uses the cluster/reader endpoints. */
+function hostFor(deployment, reader) {
+  if (deployment === 'global' && !reader) return PLACEHOLDER_HOST.global;
+  return reader ? PLACEHOLDER_HOST.reader : PLACEHOLDER_HOST.cluster;
+}
+
+/** Which credentials the emitted config should carry, given the active plugins.
+ * IAM auth injects a token in place of the password, so the password line is
+ * dropped. Secrets Manager supplies both the username and the password from the
+ * stored secret, so both lines are dropped. */
+function credentialsFor(config) {
+  const codes = (config.plugins || []).map((p) => p.code);
+  if (codes.includes('secrets_manager')) return { username: false, password: false, why: 'secrets_manager supplies the username and password' };
+  if (codes.includes('iam')) return { username: true, password: false, why: 'iam injects a token in place of the password' };
+  return { username: true, password: true, why: null };
+}
 
 /** Longest key in a set of lines, so inline comments line up. */
 function pad(lines) {
@@ -101,15 +120,16 @@ function connectionBlock(config, ctx, { role, indent }) {
   const pre = ' '.repeat(indent);
   const { meta, engine, arVersion } = ctx;
   const isReader = role === 'reading';
-  const host = isReader || config.endpoint === 'reader' ? PLACEHOLDER_HOST.reader : PLACEHOLDER_HOST.cluster;
+  const host = hostFor(ctx.deployment, isReader || config.endpoint === 'reader');
   const lines = [];
 
   lines.push({ text: `${pre}adapter: ${meta.adapter[engine]}`, why: 'the wrapper\'s adapter' });
   lines.push({ text: `${pre}host: ${host}`, why: isReader ? 'spreads reads across replicas' : null });
   lines.push({ text: `${pre}database: mydb` });
-  lines.push({ text: `${pre}username: <username>` });
-  lines.push({ text: `${pre}password: <password>` });
-  if (isReader) lines.push({ text: `${pre}replica: true`, why: 'Rails skips migrations here' });
+  const creds = credentialsFor(config);
+  if (creds.username) lines.push({ text: `${pre}username: <username>` });
+  if (creds.password) lines.push({ text: `${pre}password: <password>`, why: creds.why });
+  if (isReader) lines.push({ text: `${pre}replica: true`, why: 'marks this as read-only so Rails runs no migrations against it' });
 
   const cfg = withPluginList(config);
   orderedParams(cfg).forEach((key) => {
@@ -206,14 +226,15 @@ function emitActiveRecord(config, ctx) {
 
 function directArgs(config, ctx, { reader }) {
   const { meta, engine } = ctx;
-  const host = reader || config.endpoint === 'reader' ? PLACEHOLDER_HOST.reader : PLACEHOLDER_HOST.cluster;
+  const host = hostFor(ctx.deployment, reader || config.endpoint === 'reader');
   const lines = [];
   const isPg = engine === 'pg';
 
   lines.push({ text: `  host: ${rubyValue(host)}`, why: reader ? 'the reader endpoint' : null });
   lines.push({ text: `  ${isPg ? 'dbname' : 'database'}: 'mydb'` });
-  lines.push({ text: `  ${isPg ? 'user' : 'username'}: '<username>'` });
-  lines.push({ text: "  password: '<password>'" });
+  const creds = credentialsFor(config);
+  if (creds.username) lines.push({ text: `  ${isPg ? 'user' : 'username'}: '<username>'` });
+  if (creds.password) lines.push({ text: "  password: '<password>'", why: creds.why });
 
   const cfg = withPluginList(config);
   orderedParams(cfg).forEach((key) => {

@@ -66,8 +66,9 @@ export default function ConfigBuilder({ data }) {
       engine: state.engine,
       arVersion: state.arVersion,
       integration: active.integration,
+      deployment,
     });
-  }, [answeredAll, config, data.meta, state.engine, state.arVersion, active.integration]);
+  }, [answeredAll, config, data.meta, state.engine, state.arVersion, active.integration, deployment]);
 
   const setAnswer = useCallback((questionId, optionId) => {
     setState((s) => ({ ...s, answers: { ...s.answers, [questionId]: optionId } }));
@@ -110,13 +111,19 @@ export default function ConfigBuilder({ data }) {
       </div>
 
       {/* ---------- the big rows ---------- */}
-      {data.questions.map((question, index) => {
-        if (!condMet(question.showIf, gate)) return null;
-        const staleHere = stale.find((s) => s.questionId === question.id);
-        return (
+      {(() => {
+        let stableNum = 0;
+        return data.questions.map((question) => {
+          if (!condMet(question.showIf, gate)) return null;
+          // Questions with an explicit `number` (e.g. an optional sub-question
+          // like "3b") keep that label; the rest auto-number 1, 2, 3… so the
+          // stable questions never renumber when an optional one is hidden.
+          const label = question.number || String(++stableNum);
+          const staleHere = stale.find((s) => s.questionId === question.id);
+          return (
           <section key={question.id} className={styles.row}>
             <div className={styles.rowHead}>
-              <span className={styles.rowNum}>{index + 1}</span>
+              <span className={styles.rowNum}>{label}</span>
               <div>
                 <h3 className={styles.rowTitle}>{question.title}</h3>
                 {question.body && <p className={styles.body}>{question.body}</p>}
@@ -160,7 +167,8 @@ export default function ConfigBuilder({ data }) {
             </div>
           </section>
         );
-      })}
+        });
+      })()}
 
       {/* ---------- add-ons ---------- */}
       <section className={styles.row}>

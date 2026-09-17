@@ -68,10 +68,23 @@ Active Record keeps its own connection pool and its reading and writing roles; t
 If you use the `pg` or `mysql2` gem without Active Record, the wrapper provides connection classes that stand in for `PG::Connection` and `Mysql2::Client`:
 
 ```ruby
+# PostgreSQL (pg)
 conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
   dbname: 'mydb',
   user: '<username>',
+  password: '<password>',
+  wrapper_plugins: 'failover',
+  failover_timeout_sec: 300.0
+)
+```
+
+```ruby
+# MySQL (mysql2)
+conn = AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
+  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+  database: 'mydb',
+  username: '<username>',
   password: '<password>',
   wrapper_plugins: 'failover',
   failover_timeout_sec: 300.0

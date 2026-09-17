@@ -131,10 +131,22 @@ wrappers:
                 `Mysql2::Client`:
             - lang: ruby
               code: |
+                # PostgreSQL (pg)
                 conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
                   host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
                   dbname: 'mydb',
                   user: '<username>',
+                  password: '<password>',
+                  wrapper_plugins: 'failover',
+                  failover_timeout_sec: 300.0
+                )
+            - lang: ruby
+              code: |
+                # MySQL (mysql2)
+                conn = AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
+                  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+                  database: 'mydb',
+                  username: '<username>',
                   password: '<password>',
                   wrapper_plugins: 'failover',
                   failover_timeout_sec: 300.0

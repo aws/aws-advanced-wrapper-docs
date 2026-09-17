@@ -907,10 +907,16 @@ plugins:
       by replacing the outdated endpoint while DNS is updating. It also recognizes an
       Aurora Global Writer Endpoint and substitutes it with the current writer
       endpoint.
+
+      This plugin is part of the default plugin list as of v1.0.0: it resolves a cluster
+      endpoint to a specific instance and distributes new connections across the
+      cluster's instances. It does not apply to deployments it is incompatible with
+      (for example an Aurora custom endpoint) or where there is no cluster endpoint
+      to resolve (for example behind an RDS Proxy), and should be left out there.
     code:
       ruby: initial_connection
     availableSince:
-      ruby: "1.0.0"
+      ruby: "1.0.0 (default plugin)"
     enableSnippet:
       ruby: |
         conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(

@@ -125,13 +125,18 @@ export function applyPatch(config, emit, from, data) {
 export function resolveAnswers(data, state) {
   const active = {};
   const stale = [];
+  // Gate question answers with the raw db_type selection exposed as
+  // `deployment`, so a continuity answer that the chosen database type makes
+  // invalid (e.g. "survives instance loss" on a community database) is treated
+  // as stale — excluded from the configuration, not just greyed in the UI.
+  const deployment = deploymentOf(state);
   for (const question of data.questions) {
-    if (!condMet(question.showIf, { ...state, ...active })) continue;
+    if (!condMet(question.showIf, { ...state, ...active, deployment })) continue;
     const chosen = state.answers[question.id];
     if (!chosen) continue;
     const option = question.options.find((o) => o.id === chosen);
     if (!option) continue;
-    const reason = blockReason(option, { ...state, ...active }, data);
+    const reason = blockReason(option, { ...state, ...active, deployment }, data);
     if (reason) {
       stale.push({ questionId: question.id, label: option.label, reason });
       continue;

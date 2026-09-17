@@ -4,7 +4,7 @@ title: Development Guide
 
 # Development Guide
 
-This guide is for **open-source contributors to the AWS Advanced Ruby Driver Wrapper** and for **developers who want to understand the project more deeply** — whether to build their own plugins or to adapt the code for their own purposes. If you are simply using the wrapper in your application, see the [Overview](../overview) instead.
+This guide is for **open-source contributors to the AWS Advanced Ruby Driver Wrapper** and for **developers who want to understand the project more deeply** — whether to build their own plugins or to adapt the code for their own purposes. If you are simply using the wrapper in your application, see the [Overview](../overview.md) instead.
 
 ## Setup
 

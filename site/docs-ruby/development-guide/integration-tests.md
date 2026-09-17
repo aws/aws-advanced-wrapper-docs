@@ -14,8 +14,9 @@ title: Integration Tests
 ### Aurora Test Requirements
 
 - An AWS account with:
-  - RDS permissions.
-  - EC2 permissions so integration tests can add the current IP address in the Aurora cluster's EC2 security group.
+  - RDS permissions to create, describe, and delete Aurora clusters and instances used by the tests — for example `rds:CreateDBCluster`, `rds:CreateDBInstance`, `rds:DescribeDBClusters`, `rds:DescribeDBInstances`, `rds:DeleteDBCluster`, `rds:DeleteDBInstance`, and (for global-database tests) `rds:CreateGlobalCluster` / `rds:DescribeGlobalClusters` / `rds:DeleteGlobalCluster`.
+  - `rds-db:connect` for the database user when exercising the IAM authentication suite.
+  - EC2 permissions so integration tests can add the current IP address to the Aurora cluster's security group — `ec2:DescribeSecurityGroups` and `ec2:AuthorizeSecurityGroupIngress`.
   - For more information, see: [Setting Up for Amazon RDS User Guide](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_SettingUp.html).
 - An available Aurora PostgreSQL or MySQL DB cluster is required if you're running the tests against an existing DB cluster.
 

@@ -20,17 +20,17 @@ This page is part of the [Compatibility Guide](../compatibility) and explains pl
 - User custom domain (CNAME alias) — `any other domain name, for example my-database.my-domain.com`
 ## Compatibility matrix
 
-Legend: ✅ compatible · ❌ not compatible · blank = no constraint recorded.
+Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links to the reason in [Notes](#notes) · blank = no constraint recorded.
 
 | Plugin | Aurora Global Database Endpoint | Aurora Cluster Writer Endpoint | Aurora Cluster Reader Endpoint | Aurora Cluster Custom Endpoint | Aurora Instance Endpoint, RDS Instance Endpoint | RDS Multi-AZ DB Cluster Writer Endpoint | RDS Multi-AZ DB Cluster Reader Endpoint | RDS Proxy Endpoint | DB Shard Group Endpoint (Aurora Limitless) | IP address | User custom domain (CNAME alias) | 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | 
 | [`custom_endpoint`](../using-plugins/custom-endpoint) | ❌ [^1] | ❌ [^1] | ❌ [^1] | ✅ | ❌ [^1] | ❌ [^1] | ❌ [^1] | ❌ [^1] | ❌ [^1] | ❌ [^1] | ❌ [^1] | 
-| [`failover`](../enhanced-failover) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^2] | ❌ [^3] | ✅ (requires special configuration) | ✅ (requires special configuration) | 
-| [`gdb_failover`](../using-plugins/gdb-failover) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^2] | ❌ [^4] | ✅ (requires special configuration) | ✅ (requires special configuration) | 
-| [`iam`](../using-plugins/iam-authentication) | ✅ (requires `initialConnection` plugin) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (requires special configuration) | ✅ (requires special configuration) | 
-| [`secrets_manager`](../using-plugins/aws-secrets-manager) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (requires special configuration) | ✅ (requires special configuration) | 
-| [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ❌ [^5] | ❌ [^6] | ✅ | ✅ | ❌ [^6] | ❌ [^6] | ❌ [^6] | ❌ [^6] | 
-| [`bg`](../using-plugins/blue-green) | ❌ [^7] | ✅ | ✅ | ✅ | ✅ | ❌ [^8] | ❌ [^8] | ✅ | ❌ [^9] | ✅ (requires special configuration) | ❌ [^10] | 
+| [`failover`](../enhanced-failover) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^2] | ❌ [^3] | ✅ [^4] | ✅ [^4] | 
+| [`gdb_failover`](../using-plugins/gdb-failover) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^2] | ❌ [^5] | ✅ [^6] | ✅ [^6] | 
+| [`iam`](../using-plugins/iam-authentication) | ✅ [^7] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^8] | ✅ [^8] | 
+| [`secrets_manager`](../using-plugins/aws-secrets-manager) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^9] | ✅ [^9] | 
+| [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ❌ [^10] | ❌ [^11] | ✅ | ✅ | ❌ [^11] | ❌ [^11] | ❌ [^11] | ❌ [^11] | 
+| [`bg`](../using-plugins/blue-green) | ❌ [^12] | ✅ | ✅ | ✅ | ✅ | ❌ [^13] | ❌ [^13] | ✅ | ❌ [^14] | ✅ [^15] | ❌ [^16] | 
 
 ## Notes
 
@@ -40,17 +40,29 @@ Legend: ✅ compatible · ❌ not compatible · blank = no constraint recorded.
 
 [^3]: Aurora Limitless shard groups manage their own routing; the failover plugin does not operate on the Limitless shard-group endpoint.
 
-[^4]: Aurora Limitless shard groups manage their own routing; the global database failover plugin does not operate on the Limitless shard-group endpoint.
+[^4]: Supported, but the wrapper cannot recognize an IP address or custom domain as an RDS endpoint, so set `cluster_instance_host_pattern` (using `?` as the instance-identifier placeholder) so topology can build per-instance endpoints; set the cluster identifier as well when using a custom domain.
 
-[^5]: The initial connection plugin is incompatible with the Aurora custom endpoint URL type.
+[^5]: Aurora Limitless shard groups manage their own routing; the global database failover plugin does not operate on the Limitless shard-group endpoint.
 
-[^6]: The initial connection plugin needs a cluster endpoint to resolve; this endpoint points at a single host or has no discoverable topology.
+[^6]: Supported, but the wrapper cannot recognize an IP address or custom domain as an RDS endpoint, so set `global_cluster_instance_host_patterns` (one region-prefixed pattern per region) and `failover_home_region` so the plugin can build per-region topology.
 
-[^7]: AWS does not support Blue/Green deployments on Aurora global databases.
+[^7]: Requires the `initial_connection` plugin. A global endpoint carries no region and points at the current primary cluster, so it must be resolved to the writer instance before the IAM token is generated.
 
-[^8]: AWS Blue/Green deployments are not available for RDS Multi-AZ DB clusters (only for Multi-AZ DB instance deployments).
+[^8]: Supported, but the wrapper cannot derive the token host or region from an IP address or custom domain, so set `iam_host` to a valid RDS endpoint (and `iam_region` if it cannot be parsed) so the IAM token is generated for the right host.
 
-[^9]: Aurora Limitless shard groups manage their own routing; the Blue/Green plugin does not operate on the Limitless shard-group endpoint.
+[^9]: Supported, but the region cannot be parsed from an IP address or custom domain, so set `secret_region` (unless the secret id is an ARN, which already contains the region).
 
-[^10]: The Blue/Green plugin resolves the deployment from a recognizable RDS endpoint; it cannot follow a switchover behind a custom domain name.
+[^10]: The initial connection plugin is incompatible with the Aurora custom endpoint URL type.
+
+[^11]: The initial connection plugin needs a cluster endpoint to resolve; this endpoint points at a single host or has no discoverable topology.
+
+[^12]: AWS does not support Blue/Green deployments on Aurora global databases.
+
+[^13]: AWS Blue/Green deployments are not available for RDS Multi-AZ DB clusters (only for Multi-AZ DB instance deployments).
+
+[^14]: Aurora Limitless shard groups manage their own routing; the Blue/Green plugin does not operate on the Limitless shard-group endpoint.
+
+[^15]: Supported, but the Blue/Green plugin resolves the deployment from a recognizable RDS endpoint; connecting via an IP address requires providing the RDS endpoint information the plugin needs to identify the deployment.
+
+[^16]: The Blue/Green plugin resolves the deployment from a recognizable RDS endpoint; it cannot follow a switchover behind a custom domain name.
 

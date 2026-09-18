@@ -58,11 +58,12 @@ universal:
 # distinct reason used in a matrix, so cells that share a rationale share a
 # footnote. Keep the wording deployment-accurate, and flag combinations that
 # are meaningless (technically loadable but pointless) as such.
-reasons:
+notes:
   needsAuroraCustomEndpoint: "The custom endpoint plugin tracks an Aurora custom endpoint, which only exists on an Aurora cluster; there is nothing for it to track here."
   failoverNeedsClusterTopology: "The failover plugin needs a cluster with more than one instance to promote; this deployment has no other instance to fail over to."
   gdbNeedsGlobal: "The global database failover plugin needs an Aurora global database spanning regions; this deployment is not one."
   gdbUseFailoverInstead: "The global database failover plugin can function here, but the failover plugin is recommended instead — it provides the same failover coverage for a single-region cluster while consuming fewer resources."
+  failoverUseGdbInstead: "On an Aurora global database, use the global database failover plugin ({plugin:gdbFailover}) instead — it is region-aware and reconnects across the global cluster's regions, which the standard failover plugin does not do."
   initialConnNeedsClusterTopology: "The initial connection plugin resolves a cluster endpoint to an instance; this deployment has no cluster topology to resolve."
   awsAuthNotCommunity: "IAM and Secrets Manager authentication are Amazon RDS/Aurora features; a community database you run yourself does not support them."
   bgNotGlobal: "AWS does not support Blue/Green deployments on Aurora global databases."
@@ -76,6 +77,16 @@ reasons:
   initialConnNotCustomEndpoint: "The initial connection plugin is incompatible with the Aurora custom endpoint URL type."
   initialConnNeedsClusterEndpoint: "The initial connection plugin needs a cluster endpoint to resolve; this endpoint points at a single host or has no discoverable topology."
   proxyDoesOwnFailover: "An RDS Proxy performs its own failover. Connecting through that endpoint with a simple retry is the recommended configuration for handling a failover event."
+  # ✅-cell inline note, referenced via `noteRef`. Uses a {plugin:key} placeholder so
+  # it renders the correct plugin code for each wrapper (e.g. `initial_connection` / `initialConnection`).
+  iamNeedsInitialConn: "Requires the {plugin:initialConnection} plugin. A global endpoint carries no region and points at the current primary cluster, so it must be resolved to the writer instance before the IAM token is generated."
+  # ✅-cell notes for IP-address / custom-domain (CNAME) endpoints, which the wrapper
+  # cannot recognize as RDS endpoints. Each states the exact parameter(s) to set.
+  failoverNeedsHostPattern: "Supported, but the wrapper cannot recognize an IP address or custom domain as an RDS endpoint, so set `cluster_instance_host_pattern` (using `?` as the instance-identifier placeholder) so topology can build per-instance endpoints; set the cluster identifier as well when using a custom domain."
+  gdbNeedsHostPattern: "Supported, but the wrapper cannot recognize an IP address or custom domain as an RDS endpoint, so set `global_cluster_instance_host_patterns` (one region-prefixed pattern per region) and `failover_home_region` so the plugin can build per-region topology."
+  iamNeedsHostOverride: "Supported, but the wrapper cannot derive the token host or region from an IP address or custom domain, so set `iam_host` to a valid RDS endpoint (and `iam_region` if it cannot be parsed) so the IAM token is generated for the right host."
+  secretsNeedsRegion: "Supported, but the region cannot be parsed from an IP address or custom domain, so set `secret_region` (unless the secret id is an ARN, which already contains the region)."
+  bgNeedsRdsEndpoint: "Supported, but the Blue/Green plugin resolves the deployment from a recognizable RDS endpoint; connecting via an IP address requires providing the RDS endpoint information the plugin needs to identify the deployment."
 
 # Endpoint reference list shown on the URL-type page.
 endpointReference:
@@ -124,7 +135,7 @@ overrides:
         "RDS Proxy Endpoint":
           value: false
           reason: proxyDoesOwnFailover
-          note: "the plugin rejects RDS Proxy endpoints, which perform their own failover"
+          note: "The plugin rejects RDS Proxy endpoints, which perform their own failover."
 
 # ---------------------------------------------------------------------------
 # Imported matrices. Values: true (compatible) / false (incompatible), with
@@ -160,7 +171,7 @@ databaseTypes:
     RDS Single-AZ Instance deployment (1 instance) (MySQL and PG): { value: no, reason: needsAuroraCustomEndpoint }
     Community Database (MySQL and PG): { value: no, reason: needsAuroraCustomEndpoint }
   failover2:
-    Aurora Global Database (MySQL and PG): { value: yes }
+    Aurora Global Database (MySQL and PG): { value: no, reason: failoverUseGdbInstead }
     Aurora Cluster (MySQL and PG): { value: yes }
     RDS Multi-AZ DB Cluster deployment (3 instances) (MySQL and PG): { value: yes }
     RDS Multi-AZ DB Instance deployment (2 instances) (MySQL and PG): { value: no, reason: failoverNeedsClusterTopology }
@@ -225,8 +236,8 @@ endpoints:
     RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }
     RDS Proxy Endpoint: { value: yes }
     DB Shard Group Endpoint (Aurora Limitless): { value: no, reason: failoverNotLimitless }
-    IP address: { value: yes, note: requires special configuration }
-    User custom domain (CNAME alias): { value: yes, note: requires special configuration }
+    IP address: { value: yes, noteRef: failoverNeedsHostPattern }
+    User custom domain (CNAME alias): { value: yes, noteRef: failoverNeedsHostPattern }
   gdbFailover:
     Aurora Global Database Endpoint: { value: yes }
     Aurora Cluster Writer Endpoint: { value: yes }
@@ -237,10 +248,10 @@ endpoints:
     RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }
     RDS Proxy Endpoint: { value: no, reason: proxyDoesOwnFailover }
     DB Shard Group Endpoint (Aurora Limitless): { value: no, reason: gdbNotLimitless }
-    IP address: { value: yes, note: requires special configuration }
-    User custom domain (CNAME alias): { value: yes, note: requires special configuration }
+    IP address: { value: yes, noteRef: gdbNeedsHostPattern }
+    User custom domain (CNAME alias): { value: yes, noteRef: gdbNeedsHostPattern }
   iam:
-    Aurora Global Database Endpoint: { value: yes, note: "requires `initialConnection` plugin" }
+    Aurora Global Database Endpoint: { value: yes, noteRef: iamNeedsInitialConn }
     Aurora Cluster Writer Endpoint: { value: yes }
     Aurora Cluster Reader Endpoint: { value: yes }
     Aurora Cluster Custom Endpoint: { value: yes }
@@ -249,8 +260,8 @@ endpoints:
     RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }
     RDS Proxy Endpoint: { value: yes }
     DB Shard Group Endpoint (Aurora Limitless): { value: yes }
-    IP address: { value: yes, note: requires special configuration }
-    User custom domain (CNAME alias): { value: yes, note: requires special configuration }
+    IP address: { value: yes, noteRef: iamNeedsHostOverride }
+    User custom domain (CNAME alias): { value: yes, noteRef: iamNeedsHostOverride }
   awsSecretsManager:
     Aurora Global Database Endpoint: { value: yes }
     Aurora Cluster Writer Endpoint: { value: yes }
@@ -261,8 +272,8 @@ endpoints:
     RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }
     RDS Proxy Endpoint: { value: yes }
     DB Shard Group Endpoint (Aurora Limitless): { value: yes }
-    IP address: { value: yes, note: requires special configuration }
-    User custom domain (CNAME alias): { value: yes, note: requires special configuration }
+    IP address: { value: yes, noteRef: secretsNeedsRegion }
+    User custom domain (CNAME alias): { value: yes, noteRef: secretsNeedsRegion }
   initialConnection:
     Aurora Global Database Endpoint: { value: yes }
     Aurora Cluster Writer Endpoint: { value: yes }
@@ -285,14 +296,14 @@ endpoints:
     RDS Multi-AZ DB Cluster Reader Endpoint: { value: no, reason: bgNotMultiAzCluster }
     RDS Proxy Endpoint: { value: yes }
     DB Shard Group Endpoint (Aurora Limitless): { value: no, reason: bgNotLimitless }
-    IP address: { value: yes, note: requires special configuration }
+    IP address: { value: yes, noteRef: bgNeedsRdsEndpoint }
     User custom domain (CNAME alias): { value: no, reason: bgNotCname }
 
 crossPlugins:
   failover2:
-    gdbFailover: { value: no, note: "Both drive cluster failover; gdb_failover is the region-aware superset, so running both means two components contend over reconnection and topology." }
+    gdbFailover: { value: no, note: "Both drive cluster failover; {plugin:gdbFailover} is the region-aware superset, so running both means two components contend over reconnection and topology." }
   gdbFailover:
-    failover2: { value: no, note: "Both drive cluster failover; gdb_failover is the region-aware superset, so running both means two components contend over reconnection and topology." }
+    failover2: { value: no, note: "Both drive cluster failover; {plugin:gdbFailover} is the region-aware superset, so running both means two components contend over reconnection and topology." }
   iam:
     failover2: { value: yes }
     gdbFailover: { value: yes }
@@ -302,7 +313,7 @@ crossPlugins:
     iam: { value: no, note: "Two authentication plugins both trying to set the connection credential; only one authentication plugin may be active at a time." }
   customEndpoint:
     failover2: { value: yes }
-    gdbFailover: { value: no, note: "Meaningless: a custom endpoint is a single-region Aurora cluster construct, while gdb_failover operates across regions on a global database." }
+    gdbFailover: { value: no, note: "Meaningless: a custom endpoint is a single-region Aurora cluster construct, while {plugin:gdbFailover} operates across regions on a global database." }
     iam: { value: yes }
     awsSecretsManager: { value: yes }
   initialConnection:

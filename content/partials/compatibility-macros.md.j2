@@ -1,7 +1,7 @@
 {# Shared macros for the compatibility matrices. #}
 
-{% macro legend() -%}
-Legend: ✅ compatible · ❌ not compatible · blank = no constraint recorded.
+{% macro legend(with_notes=true) -%}
+Legend: ✅ compatible · ❌ not compatible{% if with_notes %} · a numbered footnote `[^n]` links to the reason in [Notes](#notes){% endif %} · blank = no constraint recorded.
 {%- endmacro %}
 
 {% macro plugin_label(p, depth) -%}
@@ -19,10 +19,8 @@ Legend: ✅ compatible · ❌ not compatible · blank = no constraint recorded.
 {%- if entry is none -%}
 {{ '' }}
 {%- elif entry.value -%}
-✅{% if entry.note %} ({{ entry.note }}){% endif %}
-{%- elif entry.marker -%}
-❌ [^{{ entry.marker }}]
+✅{% if entry.marker %} [^{{ entry.marker }}]{% endif %}
 {%- else -%}
-❌{% if entry.note %} ({{ entry.note }}){% endif %}
+❌{% if entry.marker %} [^{{ entry.marker }}]{% endif %}
 {%- endif -%}
 {%- endmacro %}

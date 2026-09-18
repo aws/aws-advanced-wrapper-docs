@@ -5,9 +5,9 @@ title: {{ page_title }}
 {% import "partials/compatibility-macros.md.j2" as m %}
 This page is part of the [Compatibility Guide](../compatibility) and explains compatibility between plugins. Combining plugins in one configuration is normal, but some plugins do not work correctly together, either because of a design constraint, a logical conflict, or because the combination is meaningless.
 
-Legend: ✅ compatible · ❌ not compatible (see the numbered note) · — same plugin · blank = no constraint, or the pair is shown in the other table.
+Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links to the reason in [Notes](#notes) · — same plugin
 
-Each pair of plugins appears once. Read a row against the columns; a ❌ links to the reason in [Notes](#notes) below.
+This is a lower-triangular matrix: **each plugin pair is shown only once.** To keep it compact, a pair appears in just one place — so a **blank cell does not mean "unknown."** If a cell is blank, find that pair the other way around: look up the *other* plugin's row and scan across to this plugin's column. Because the plugins are split across more than one table for width, the other orientation of a pair may also be in a different table below. Read a row against the columns; any reason a pair is incompatible is given as a numbered footnote in [Notes](#notes).
 
 {% for table in compat.cross_tables %}
 

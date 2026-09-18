@@ -41,6 +41,7 @@ it finds the same page id in the target wrapper, or falls back to a
 
 import json
 import os
+import re
 import shutil
 import sys
 
@@ -116,14 +117,52 @@ def _profile_enhanced_failover(page, wid, regs):
 
 
 def _resolve_cell(cell):
-    """Normalize a matrix cell to {value, note, reason} or None."""
+    """Normalize a matrix cell to {value, note, reason, note_ref} or None."""
     if cell is None:
         return None
     return {
         "value": bool(cell.get("value")),
         "note": cell.get("note") or "",
         "reason": cell.get("reason") or "",
+        "note_ref": cell.get("noteRef") or "",
     }
+
+
+# Placeholder in note text that is substituted with a wrapper's plugin code,
+# e.g. "use the {plugin:gdbFailover} plugin" -> "use the `gdb_failover` plugin".
+_PLUGIN_PLACEHOLDER = re.compile(r"\{plugin:([A-Za-z0-9_]+)\}")
+
+
+def _substitute_plugin_codes(text, key_to_code, *, context):
+    """Replace every {plugin:<key>} in `text` with the wrapper's backtick-wrapped
+    plugin code. Hard error if a referenced key is not a plugin this wrapper has
+    (a code for), so a typo or a note naming an absent plugin fails the build
+    rather than emitting a broken placeholder."""
+
+    def repl(match):
+        key = match.group(1)
+        code = key_to_code.get(key)
+        if not code:
+            die(
+                f"note {context}: '{{plugin:{key}}}' references a plugin the "
+                f"wrapper does not have (known keys: {', '.join(sorted(key_to_code)) or 'none'})."
+            )
+        return f"`{code}`"
+
+    return _PLUGIN_PLACEHOLDER.sub(repl, text)
+
+
+def _note_text(name, library, wid, key_to_code):
+    """Resolve a named note from the library to final text for one wrapper.
+
+    A note value is either a shared string (used verbatim by every wrapper) or a
+    per-wrapper map with an optional `default` (resolved by `_scn_text`). After
+    per-wrapper selection, any {plugin:<key>} placeholders are substituted with
+    the wrapper's plugin code. Hard error on an unknown note name."""
+    if name not in library:
+        die(f"unknown note reference '{name}' (not defined in the notes library).")
+    text = _scn_text(library[name], wid) or ""
+    return _substitute_plugin_codes(text, key_to_code, context=f"'{name}'")
 
 
 def _profile_compatibility(page, wid, regs):
@@ -159,14 +198,32 @@ def _profile_compatibility(page, wid, regs):
     # The cross-plugin matrix considers every plugin the wrapper has, including
     # universal ones (which are compatible with everything).
     all_plugins = plugins + universal
-    universal_codes = {p["code"] for p in universal}
 
-    reasons_text = reg.get("reasons", {}) or {}
+    # Named note library (see `notes:` in compatibility.yaml). A note value is a
+    # shared string, or a per-wrapper map; {plugin:<key>} placeholders in the text
+    # are substituted with this wrapper's plugin code.
+    note_library = reg.get("notes", {}) or {}
+    # Map every plugin the wrapper has (incl. universal) from abstract key -> code,
+    # for {plugin:<key>} placeholder substitution in note text.
+    key_to_code = {p["key"]: p["code"] for p in all_plugins}
+
+    def note_text_for(*, reason="", note_ref="", literal=""):
+        """Resolve final note text for one cell. Precedence: a library reference
+        (reason key on a ❌ cell, or noteRef on any cell) wins over a literal
+        `note`. Placeholders are substituted in the literal path too."""
+        if reason:
+            return _note_text(reason, note_library, wid, key_to_code)
+        if note_ref:
+            return _note_text(note_ref, note_library, wid, key_to_code)
+        if literal:
+            return _substitute_plugin_codes(literal, key_to_code, context="(inline note)")
+        return ""
 
     def matrix(section, columns):
-        """Build a plugin×column matrix, attaching a footnote marker to each
-        incompatible cell. Cells that share a `reason` key share one footnote,
-        numbered in reading order (row by row, column by column)."""
+        """Build a plugin×column matrix. Any cell that carries a note or reason
+        (compatible ✅ or incompatible ❌) gets a numbered footnote marker; cells
+        that share a `reason`/`noteRef`/text share one footnote, numbered in
+        reading order (row by row, column by column). Notes are never inline."""
         rows = {}
         source = reg.get(section, {}) or {}
         section_overrides = overrides.get(section, {}) or {}
@@ -183,14 +240,15 @@ def _profile_compatibility(page, wid, regs):
                 resolved = _resolve_cell(cell)
                 if resolved:
                     cells[column] = resolved
-            # Assign footnote markers in column order for a stable reading order.
             for column in columns:
                 cell = cells.get(column)
-                if not cell or cell["value"]:
+                if not cell:
                     continue
                 reason_key = cell.get("reason") or ""
-                text = reasons_text.get(reason_key, cell.get("note") or "")
-                dedup = reason_key or f"__note__:{text}"
+                text = note_text_for(reason=reason_key, note_ref=cell["note_ref"], literal=cell["note"])
+                if not text:
+                    continue  # a plain ✅/❌ with no explanation
+                dedup = reason_key or cell["note_ref"] or f"__note__:{text}"
                 if dedup not in reason_to_marker:
                     reason_to_marker[dedup] = len(notes) + 1
                     notes.append({"n": reason_to_marker[dedup], "text": text})
@@ -215,12 +273,11 @@ def _profile_compatibility(page, wid, regs):
             symmetric.setdefault(row_key, {})[col_key] = resolved
             symmetric.setdefault(col_key, {})[row_key] = resolved
 
-    by_key_to_code = {p["key"]: p["code"] for p in all_plugins}
     universal_keys = {p["key"] for p in universal}
     cross = {}
-    for row_key, row_code in by_key_to_code.items():
+    for row_key, row_code in key_to_code.items():
         cells = {}
-        for col_key, col_code in by_key_to_code.items():
+        for col_key, col_code in key_to_code.items():
             if col_key == row_key:
                 continue
             # A universal plugin is compatible with everything, with no note.
@@ -238,15 +295,18 @@ def _profile_compatibility(page, wid, regs):
     # only when the column comes strictly before the row in that order (lower
     # triangle), so a×b appears once and b×a never does.
     #
-    #   Table 1: columns = first 4 plugins, rows = all plugins.
-    #   Table 2: columns = last 4 plugins, rows = the last 4 plugins.
+    # The matrix is split into tables by COLUMN GROUP, K columns per table, so it
+    # stays readable for any number of plugins. For a column group starting at
+    # index `i` (columns order[i:i+K]), the rows are order[i:] — every row that
+    # can have a lower-triangle cell against one of those columns (rows above `i`
+    # were already covered by an earlier group). This covers the whole triangle
+    # exactly once regardless of plugin count.
     #
     # Every incompatible cell gets a footnote number assigned in reading order
-    # (table 1 top-to-bottom then table 2), collected into `notes`.
+    # (first table top-to-bottom, then the next), collected into `notes`.
+    CROSS_TABLE_COLUMNS = 4  # columns per cross-plugin table
     order = list(all_plugins)
     pos = {p["code"]: i for i, p in enumerate(order)}
-    first4 = order[:4]
-    last4 = order[4:8]
     notes = []
 
     def build_table(columns, rows):
@@ -271,14 +331,21 @@ def _profile_compatibility(page, wid, regs):
                 marker = None
                 if state == "no":
                     marker = len(notes) + 1
-                    notes.append({"n": marker, "text": cell.get("note") or ""})
+                    text = note_text_for(
+                        reason=cell.get("reason") or "",
+                        note_ref=cell.get("note_ref") or "",
+                        literal=cell.get("note") or "",
+                    )
+                    notes.append({"n": marker, "text": text})
                 cells.append({"state": state, "marker": marker})
             out_rows.append({"plugin": row, "cells": cells})
         return {"columns": columns, "rows": out_rows}
 
+    # One table per column-group of K; rows start at the group's first column so
+    # the lower triangle is covered exactly once.
     cross_tables = [
-        build_table(first4, order),
-        build_table(last4, last4),
+        build_table(order[i:i + CROSS_TABLE_COLUMNS], order[i:])
+        for i in range(0, len(order), CROSS_TABLE_COLUMNS)
     ]
 
     return {

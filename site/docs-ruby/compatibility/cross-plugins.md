@@ -4,9 +4,9 @@ title: Cross-Plugin Compatibility
 
 This page is part of the [Compatibility Guide](../compatibility) and explains compatibility between plugins. Combining plugins in one configuration is normal, but some plugins do not work correctly together, either because of a design constraint, a logical conflict, or because the combination is meaningless.
 
-Legend: ✅ compatible · ❌ not compatible (see the numbered note) · — same plugin · blank = no constraint, or the pair is shown in the other table.
+Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links to the reason in [Notes](#notes) · — same plugin
 
-Each pair of plugins appears once. Read a row against the columns; a ❌ links to the reason in [Notes](#notes) below.
+This is a lower-triangular matrix: **each plugin pair is shown only once.** To keep it compact, a pair appears in just one place — so a **blank cell does not mean "unknown."** If a cell is blank, find that pair the other way around: look up the *other* plugin's row and scan across to this plugin's column. Because the plugins are split across more than one table for width, the other orientation of a pair may also be in a different table below. Read a row against the columns; any reason a pair is incompatible is given as a numbered footnote in [Notes](#notes).
 
 
 **Columns: `custom_endpoint`, `failover`, `gdb_failover`, `iam`**
@@ -33,9 +33,9 @@ Each pair of plugins appears once. Read a row against the columns; a ❌ links t
 
 ## Notes
 
-[^1]: Meaningless: a custom endpoint is a single-region Aurora cluster construct, while gdb_failover operates across regions on a global database.
+[^1]: Meaningless: a custom endpoint is a single-region Aurora cluster construct, while `gdb_failover` operates across regions on a global database.
 
-[^2]: Both drive cluster failover; gdb_failover is the region-aware superset, so running both means two components contend over reconnection and topology.
+[^2]: Both drive cluster failover; `gdb_failover` is the region-aware superset, so running both means two components contend over reconnection and topology.
 
 [^3]: Two authentication plugins both trying to set the connection credential; only one authentication plugin may be active at a time.
 

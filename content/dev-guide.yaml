@@ -60,8 +60,19 @@ wrappers:
     pluginConfigParam: "`wrapper_plugins` connection parameter"
     pluginManagerTitle: "Plugin Manager"
     pluginManagerShort: "plugin manager"
-    hostListProvider: "RdsHostListProvider"
+    staticHostListProvider: "ConnectionStringHostListProvider"   # static provider name
+    hostListProvider: "RdsHostListProvider"                       # dynamic (topology-aware) provider name
+    globalHostListProvider: "GlobalAuroraHostListProvider"        # Global Database variant of the dynamic provider
+    topologyMonitor: "ClusterTopologyMonitor"                     # background topology monitor name
     dialectsLink: "./service-container"
+    staticDialectCodes: ["pg", "mysql", "rds-pg", "rds-mysql"]
+    dialectHostListProviders:
+      - label: "Aurora clusters"
+        codes: ["aurora-pg", "aurora-mysql"]
+      - label: "Aurora Global Databases"
+        codes: ["global-aurora-pg", "global-aurora-mysql"]
+      - label: "RDS Multi-AZ DB clusters"
+        codes: ["multi-az-pg-cluster", "multi-az-mysql-cluster"]
 
     # Ruby diagram labels come from the `diagram:` block below.
     architectureComponents: |
@@ -213,10 +224,6 @@ wrappers:
 
       :::
     # Rendered as the last paragraph of the Host List Providers section.
-    hostListProviderNotes: |
-      Which provider is used is decided by the resolved [database dialect](./architecture), not by the raw URL. The `ConnectionStringHostListProvider` is used for non-cluster dialects (plain PostgreSQL/MySQL), whereas the `RdsHostListProvider` is used for the Aurora and RDS Multi-AZ cluster dialects; it lazily starts a `ClusterTopologyMonitor` (via the shared `MonitorService`) that caches topology in the `StorageService`.
-
-      Because the dialect is refined after the first connection, connecting to an **instance** endpoint of an Aurora or Multi-AZ cluster starts out on the `ConnectionStringHostListProvider` and is then upgraded to the `RdsHostListProvider` once the wrapper queries the server and detects the cluster dialect on that first connect. To skip that detection step and use the `RdsHostListProvider` immediately, set the database dialect explicitly (for example `wrapper_dialect: aurora-pg`, `aurora-mysql`, or the Multi-AZ dialect).
     services:
       - name: "Connection Service"
         short: "Connection Service"

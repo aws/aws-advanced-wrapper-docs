@@ -11,14 +11,14 @@ connections to blue nodes terminate, endpoints are redirected, internal node
 names change, and certificates are regenerated — all of which can disrupt an
 application.
 
-The Blue/Green Deployment Plugin minimizes that disruption. It actively
-monitors switchover status; before the switchover it inventories the blue and
-green endpoints and their IP addresses; during the active switchover it
-temporarily suspends calls to blue nodes and substitutes hostnames with the
-corresponding IP addresses to avoid stale DNS; after the switchover it monitors
-DNS until blue endpoints are reconfigured, then stops substituting; and it
-rejects new connections to green nodes once switchover completes. It also
-detects switchover failures and rollbacks and restores normal handling.
+The Blue/Green Deployment Plugin minimizes that disruption by actively monitoring
+switchover status and adjusting connection handling at each phase:
+
+- **Before the switchover**, it inventories the blue and green endpoints and their IP addresses.
+- **During the active switchover**, it temporarily suspends calls to blue nodes and substitutes hostnames with the corresponding IP addresses to avoid stale DNS.
+- **After the switchover**, it monitors DNS until blue endpoints are reconfigured, then stops substituting.
+- **Once switchover completes**, it rejects new connections to green nodes.
+- **If the switchover fails or rolls back**, it detects that and restores normal handling.
 
 
 :::info Available since

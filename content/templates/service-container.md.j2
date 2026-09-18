@@ -98,12 +98,18 @@ All subsequent {{ dg.methodTerm }} will trigger the execute pipeline.
 
 Plugins should not track host information themselves. Instead, the service container uses a **host list provider** to retrieve the most recent host or topology information about the database, and notifies it to refresh when needed.
 
-The {{ dg.productName }} has two host list providers, the `ConnectionStringHostListProvider` and the `{{ dg.hostListProvider }}`.
+The {{ dg.productName }} has two host list providers, the `{{ dg.staticHostListProvider }}` and the `{{ dg.hostListProvider }}`.
 
 The `{{ dg.hostListProvider }}` provides information about the Aurora cluster. It uses an internal monitoring connection to track the available hosts and their roles in the cluster.
 
-The `ConnectionStringHostListProvider` is a static host list provider, whereas the `{{ dg.hostListProvider }}` is a dynamic host list provider. A static host list provider will fetch the host list during initialization and does not update the host list afterwards, whereas a dynamic host list provider will update the host list information based on database status.
-{% if dg.hostListProviderNotes %}
+The `{{ dg.staticHostListProvider }}` is a static host list provider, whereas the `{{ dg.hostListProvider }}` is a dynamic host list provider. A static host list provider will fetch the host list during initialization and does not update the host list afterwards, whereas a dynamic host list provider will update the host list information based on database status.
 
-{{ dg.hostListProviderNotes.strip() }}
-{% endif %}
+Which provider is used is decided by the resolved database dialect, not by the raw URL. The `{{ dg.staticHostListProvider }}` is used for the non-cluster dialects ({{ dg.staticDialectCodes | map('wrapcode') | join(', ') }}), whereas the dynamic `{{ dg.hostListProvider }}` is used for the cluster dialects; it lazily starts a `{{ dg.topologyMonitor }}` (via the shared `MonitorService`) that caches topology in the `StorageService`.{% if dg.globalHostListProvider %} Aurora Global Database dialects use `{{ dg.globalHostListProvider }}`, a topology-aware variant of `{{ dg.hostListProvider }}`.{% endif %}
+
+The dialect codes that select the dynamic, topology-aware provider are:
+
+{% for group in dg.dialectHostListProviders %}
+- {{ group.codes | map('wrapcode') | join(' / ') }} — {{ group.label }}
+{% endfor %}
+
+Because the dialect is refined after the first connection, connecting to an **instance** endpoint of one of these clusters starts out on the `{{ dg.staticHostListProvider }}` and is then upgraded to the topology-aware provider once the wrapper queries the server and detects the cluster dialect on that first connect. To skip that detection step and use the topology-aware provider immediately, set the database dialect explicitly with the dialect connection parameter.

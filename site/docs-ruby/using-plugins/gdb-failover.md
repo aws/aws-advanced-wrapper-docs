@@ -77,10 +77,12 @@ The plugin is not enabled by default. Add the plugin code `gdb_failover` to the 
 
 ```ruby
 conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
-  host: "my-cluster.cluster-xyz.us-west-1.rds.amazonaws.com",
+  host: "my-global-db.global-xyz.global.rds.amazonaws.com",
   dbname: "mydb",
   wrapper_plugins: "gdb_failover",
-  failover_home_region: "us-west-1"
+  wrapper_dialect: "global-aurora-pg",
+  failover_home_region: "us-west-1",
+  global_cluster_instance_host_patterns: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com"
 )
 
 ```

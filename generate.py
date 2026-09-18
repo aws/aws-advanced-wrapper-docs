@@ -409,6 +409,7 @@ def main():
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    env.filters["wrapcode"] = lambda v: f"`{v}`"
 
     # Clean previous generated output.
     for wid in wrappers:

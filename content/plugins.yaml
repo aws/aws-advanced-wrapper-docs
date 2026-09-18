@@ -130,7 +130,7 @@ plugins:
           ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
       - concept: iamExpiration
         type: integer
-        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. IAM database authentication tokens have a lifetime of 15 minutes (900 seconds), so keep this roughly 30 seconds below the token lifetime — the default `870.0` leaves a 30-second safety margin — so a cached token is never used after it expires."
+        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated, keep this roughly 30 seconds below the token lifetime. By default, IAM database authentication tokens have a lifetime of 15 minutes (900 seconds), so the wrapper's default `870.0` leaves the recommended 30-second safety margin so a cached token is never used after it expires."
         spellings:
           ruby: { name: iam_expiration_sec, type: float, required: "No", default: "870.0", unit: s, example: "600.0" }
       - concept: iamTokenProperty
@@ -916,10 +916,12 @@ plugins:
     enableSnippet:
       ruby: |
         conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
-          host: "my-cluster.cluster-xyz.us-west-1.rds.amazonaws.com",
+          host: "my-global-db.global-xyz.global.rds.amazonaws.com",
           dbname: "mydb",
           wrapper_plugins: "gdb_failover",
-          failover_home_region: "us-west-1"
+          wrapper_dialect: "global-aurora-pg",
+          failover_home_region: "us-west-1",
+          global_cluster_instance_host_patterns: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com"
         )
     parameters:
       - concept: homeRegion
@@ -1129,14 +1131,14 @@ plugins:
       names change, and certificates are regenerated — all of which can disrupt an
       application.
 
-      The Blue/Green Deployment Plugin minimizes that disruption. It actively
-      monitors switchover status; before the switchover it inventories the blue and
-      green endpoints and their IP addresses; during the active switchover it
-      temporarily suspends calls to blue nodes and substitutes hostnames with the
-      corresponding IP addresses to avoid stale DNS; after the switchover it monitors
-      DNS until blue endpoints are reconfigured, then stops substituting; and it
-      rejects new connections to green nodes once switchover completes. It also
-      detects switchover failures and rollbacks and restores normal handling.
+      The Blue/Green Deployment Plugin minimizes that disruption by actively monitoring
+      switchover status and adjusting connection handling at each phase:
+
+      - **Before the switchover**, it inventories the blue and green endpoints and their IP addresses.
+      - **During the active switchover**, it temporarily suspends calls to blue nodes and substitutes hostnames with the corresponding IP addresses to avoid stale DNS.
+      - **After the switchover**, it monitors DNS until blue endpoints are reconfigured, then stops substituting.
+      - **Once switchover completes**, it rejects new connections to green nodes.
+      - **If the switchover fails or rolls back**, it detects that and restores normal handling.
     code:
       ruby: bg
     availableSince:

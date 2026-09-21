@@ -1,0 +1,60 @@
+{# Apache-2.0. Single-source Integration Tests page. Per-wrapper values come
+   from content/dev-guide.yaml (wrappers.<id>); wrapper-unique sections are
+   appended from wrapperOnly.integration-tests. #}
+---
+title: {{ page_title }}
+---
+
+# Integration Tests
+
+## Prerequisites
+
+- Docker Desktop:
+  - [Docker Desktop for Mac](https://docs.docker.com/desktop/install/mac-install/)
+  - [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)
+- [Environment variables](#environment-variables)
+
+### Aurora Test Requirements
+
+- An AWS account with:
+  - RDS permissions to create, describe, and delete Aurora clusters and instances used by the tests — for example `rds:CreateDBCluster`, `rds:CreateDBInstance`, `rds:DescribeDBClusters`, `rds:DescribeDBInstances`, `rds:DeleteDBCluster`, `rds:DeleteDBInstance`, and (for global-database tests) `rds:CreateGlobalCluster` / `rds:DescribeGlobalClusters` / `rds:DeleteGlobalCluster`.
+  - `rds-db:connect` for the database user when exercising the IAM authentication suite.
+  - EC2 permissions so integration tests can add the current IP address to the Aurora cluster's security group — `ec2:DescribeSecurityGroups` and `ec2:AuthorizeSecurityGroupIngress`.
+  - For more information, see: [Setting Up for Amazon RDS User Guide](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_SettingUp.html).
+- An available Aurora PostgreSQL or MySQL DB cluster is required if you're running the tests against an existing DB cluster.
+
+## Aurora Integration Tests
+
+The Aurora integration tests are focused on testing connection strings and failover capabilities of the wrapper. The tests are run in Docker but make a connection to test against an Aurora cluster. PostgreSQL and MySQL tests are currently supported.
+
+## Standard Integration Tests
+
+These integration tests are focused on testing connection strings against a local database inside a Docker container. PostgreSQL and MySQL tests are currently supported.
+
+## Environment Variables
+
+If the environment variable {{ '`REUSE_RDS_CLUSTER`' if dg.showExistingClusterNote else '`REUSE_RDS_DB`' }} is set to true, the integration tests will use the existing cluster defined by your environment variables. Otherwise, the integration tests will create a new Aurora cluster and then delete it automatically when the tests are done. Note that you will need a valid Docker environment to run any of the integration tests because they are run using a Docker environment as a host. The appropriate Docker containers will be created automatically when you run the tests, so you will not need to execute any Docker commands manually.
+{% if dg.showExistingClusterNote %}
+
+:::note
+
+If you are running tests against an existing cluster, the tests will only run against the Aurora database engine of that cluster. For example, if you specify a MySQL cluster using the environment variables, only the MySQL tests will be run even if you pick `test-all-aurora` as the task. To run against Postgres instead, you will need to change your environment variables.
+
+:::
+{% endif %}
+
+{{ dg.itEnvVars.strip() }}
+
+## Running the Integration Tests
+
+To run the integration tests, you can select from a number of tasks:
+
+{{ dg.itTasks.strip() }}
+
+{{ dg.itRunExample.strip() }}
+
+Test results can be found at {{ dg.testResultsPath }}.
+{% if dg_only %}
+
+{{ dg_only.strip() }}
+{% endif %}

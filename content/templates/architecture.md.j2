@@ -1,0 +1,91 @@
+{# Apache-2.0. Single-source Architecture page — values from content/dev-guide.yaml. #}
+---
+title: {{ page_title }}
+---
+
+# Architecture
+
+The diagram below shows what the {{ dg.productName }} contains, which pieces are created per connection versus shared globally, and how a call flows from the user application down to the database.
+
+```mermaid
+flowchart TB
+  app["User Application"]
+
+  subgraph entry["Entry points"]
+    direction LR
+{% for ep in dg.diagram.entryPoints %}
+    ep{{ loop.index }}["{{ ep }}"]
+{% endfor %}
+  end
+
+  subgraph conn["{{ dg.diagram.wrapperNode }} — one per {{ dg.connectionShort }}"]
+    direction TB
+    pm["{{ dg.pluginManagerTitle }}"]
+    plugins["Loaded plugins<br/>(subscribed to {{ dg.methodTerm }})"]
+    terminus["{{ dg.diagram.terminusPlugin }}<br/>(pipeline terminus)"]
+    subgraph perconn["Per-connection services"]
+      direction LR
+{% for svc in dg.services %}{% if not svc.global and svc.short != "Plugin Manager" %}
+{% if svc.short == dg.diagram.hostListProviderOwner %}
+      subgraph pc{{ loop.index }}["{{ svc.short }}"]
+        hlp["Host List Provider"]
+      end
+{% else %}
+      pc{{ loop.index }}["{{ svc.short }}"]
+{% endif %}
+{% endif %}{% endfor %}
+    end
+  end
+
+  subgraph shared["Shared / global services (reused across connections)"]
+    direction LR
+{% for svc in dg.services %}{% if svc.global %}
+{% if svc.short == "Monitor Service" %}
+      subgraph g{{ loop.index }}["Monitor Service"]
+        mon["Background monitors<br/>(e.g. topology, blue/green)"]
+      end
+{% else %}
+      g{{ loop.index }}["{{ svc.short }}"]
+{% endif %}
+{% endif %}{% endfor %}
+  end
+
+  db[("Database / Aurora cluster")]
+
+  app --> entry
+{% for ep in dg.diagram.entryPoints %}
+  ep{{ loop.index }} --> pm
+{% endfor %}
+  pm --> plugins
+  plugins --> perconn
+
+  %% Two kinds of code open a connection to the database:
+  %% (1) the terminus plugin opens the connection your application uses,
+  plugins --> terminus
+  terminus -->|"opens the application connection"| db
+  %% (2) background monitors each use their OWN separate connection.
+  mon -->|"separate connection(s): topology / blue-green status"| db
+```
+
+The {{ dg.productName }} contains {{ dg.componentCount }} main components:
+
+{{ dg.architectureComponents.strip() }}
+
+The {{ dg.pluginManagerShort }} handles all the loaded or registered plugins and sends the {{ dg.methodTermSingular }} to be executed by all plugins [**subscribed**](./loadable-plugins#subscribed-methods) to that method.
+
+During execution, plugins may utilize the [service container](./service-container) to help their execution by retrieving or updating:
+
+- the current connection
+- the hosts information
+- topology of the database
+
+:::note
+
+- Each {{ dg.connectionObject }} has its own instances of:
+  - plugin manager
+  - service container
+  - loaded plugin classes
+- Multiple {{ dg.connectionObject }}s opened to the same database server will have separate sets of instances mentioned above.
+- The shared storage, monitor, and event-publisher services (and the host list provider) are reused across connections to the same database.
+
+:::

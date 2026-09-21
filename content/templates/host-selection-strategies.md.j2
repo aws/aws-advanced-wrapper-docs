@@ -1,0 +1,123 @@
+---
+title: {{ page_title }}
+---
+
+Several plugins have to pick one host out of several — the initial connection plugin when it
+resolves a reader or custom cluster endpoint, and the failover plugins when they choose a
+reader to reconnect to. Which host they pick is decided by a **host selection strategy**,
+named by a connection property.
+
+{% if wrapper_id == 'ruby' %}
+## Available strategies
+
+`random` is the only strategy built into the {{ wrapper.wrapperName }}. It picks uniformly
+at random from the hosts that match the requested role and are currently marked available.
+
+| Strategy | Behaviour | Configuration |
+|---|---|---|
+| `random` | Selects at random from the available hosts matching the requested role. | none |
+
+It is also the default, so leaving the strategy properties unset gives you random
+selection. Naming a strategy that is not registered raises
+`Unsupported host selection strategy: '<name>'` rather than silently falling back, so a
+typo fails fast.
+
+## Where it applies
+
+| Property | Used by | Default |
+|---|---|---|
+| `initial_connection_host_selector_strategy` | [Initial Connection Strategy Plugin](using-plugins/initial-connection-strategy), when the endpoint resolves to more than one host | `random` |
+| `failover_reader_host_selector_strategy` | [Enhanced Failover](enhanced-failover) and [Global Database Failover](using-plugins/gdb-failover), when reconnecting to a reader | `random` |
+
+## Supplying your own strategy
+
+Because there is only one built-in strategy, the wrapper exposes a registration hook so an
+application can add its own. Register a selector once at boot, then name it in either
+property above:
+
+```ruby
+class LeastLagHostSelector
+  # @param hosts [Array<HostInfo>] candidate hosts
+  # @param role  [Symbol, nil]     the requested role, or nil for no preference
+  # @param props [Hash, nil]       connection properties
+  # @return [HostInfo, nil]        the chosen host, or nil when none is eligible
+  def select_host(hosts, role, props = nil)
+    hosts
+      .select { |h| (role.nil? || h.role == role) && h.availability == AwsAdvancedRubyDriverWrapper::Host::HostAvailability::AVAILABLE }
+      .min_by { |h| your_lag_metric_for(h) }
+  end
+end
+
+AwsAdvancedRubyDriverWrapper::Services::HostService.register_host_selector(
+  'least_lag', LeastLagHostSelector.new
+)
+```
+
+```yaml
+# config/database.yml
+production:
+  adapter: aws_postgresql
+  # ...
+  failover_reader_host_selector_strategy: least_lag
+```
+
+Two constraints are worth knowing. A selector is shared by every connection in the process,
+so `select_host` must be safe to call from multiple threads. And a built-in name cannot be
+replaced — registering `random` raises
+`Cannot override default host selection strategy: 'random'`.
+
+:::note
+Filtering to available hosts is the selector's own responsibility. The built-in `random`
+selector does this, and a custom one should too, or it may hand back a host the wrapper has
+already marked unavailable.
+:::
+{% else %}
+## Available strategies
+
+| Strategy | Behaviour | Configuration | Since |
+|---|---|---|---|
+| `random` | The default. Selects at random from the available hosts. | none | 2.0.0 |
+| `leastConnections` | Selects the host with the fewest currently active connections. | none | 2.2.0 |
+| `roundRobin` | Takes turns across the available hosts in a cycle. Weight the cycle to send more connections to some hosts. | `roundRobinHostWeightPairs`, `roundRobinDefaultWeight` | 2.2.5 |
+| `fastestResponse` | Measures response time per host and caches the fastest. | `responseMeasurementIntervalMs` | 2.3.2 |
+| `weightedRandom` | Cumulative weighted-random selection; higher weights are chosen proportionally more often. | `weightedRandomHostWeightPairs` | 2.4.0 |
+| `lowestLoad` | Selects the least-loaded host, from CPU and lag. | `lowestLoadCpuWeight`, `lowestLoadLagWeight` | 4.1.0 |
+| `lowestLoadByCpu` | `lowestLoad` with CPU-dominant defaults (CPU 100, lag 1). | as `lowestLoad` | 4.2.0 |
+| `lowestLoadByLag` | `lowestLoad` with lag-dominant defaults (CPU 1, lag 100). | as `lowestLoad` | 4.2.0 |
+| `highestLoad` | Selects the most-loaded host, from CPU and lag. | `highestLoadCpuWeight`, `highestLoadLagWeight` | 4.1.0 |
+| `highestLoadByCpu` | `highestLoad` with CPU-dominant defaults (CPU 100, lag 1). | as `highestLoad` | 4.2.0 |
+| `highestLoadByLag` | `highestLoad` with lag-dominant defaults (CPU 1, lag 100). | as `highestLoad` | 4.2.0 |
+| ~~`highestWeight`~~ | **Deprecated** — prefer `lowestLoad`. Selects the host with the largest `HostSpec.weight`. | none | 2.5.0 |
+
+## Configuration parameters
+
+| Parameter | Applies to | Description | Default |
+|---|---|---|---|
+| `roundRobinHostWeightPairs` | `roundRobin` | Comma-separated `<host>:<weight>` pairs. The weight is how many connections go to that host per cycle, so `instance-1:1,instance-2:4` sends four connections to `instance-2` for every one to `instance-1`. Each weight must be an integer of 1 or more. | none |
+| `roundRobinDefaultWeight` | `roundRobin` | Weight for any host not named in `roundRobinHostWeightPairs` — for instance an instance added to the cluster after weights were set. Must be an integer of 1 or more. | `1` |
+| `responseMeasurementIntervalMs` | `fastestResponse` | Interval between response-time measurements per host. | `30000` |
+| `weightedRandomHostWeightPairs` | `weightedRandom` | Comma-separated `<host>:<weight>` pairs, weights integers of 1 or more. Overrides the per-host weight. | none |
+| `lowestLoadCpuWeight` / `highestLoadCpuWeight` | load strategies | Weight of CPU utilization percent in the load calculation. | `1` |
+| `lowestLoadLagWeight` / `highestLoadLagWeight` | load strategies | Weight of lag in milliseconds in the load calculation. | `100` |
+
+Load is computed as `load = lag_ms * lagWeight + cpu_percent * cpuWeight`.
+
+:::caution
+Three strategies carry prerequisites that are easy to miss.
+
+- `leastConnections` requires internal connection pools. Setting it without enabling them
+  throws rather than degrading.
+- `fastestResponse` requires the `fastestResponseStrategy` plugin in your
+  `{{ wrapper.pluginListParam }}` list; the property alone does nothing.
+- The load strategies rely on CPU and lag metrics, which non-Aurora databases may not
+  report. Without them the calculation has nothing to work from.
+:::
+
+## Where it applies
+
+These strategies are available to the plugins that choose among several hosts, including
+[Enhanced Failover](enhanced-failover), the [Failover Plugin](using-plugins/failover),
+[Global Database Failover](using-plugins/gdb-failover), the
+[Initial Connection Strategy Plugin](using-plugins/initial-connection-strategy), and the
+read/write splitting plugins.
+{% endif %}

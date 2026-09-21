@@ -1,0 +1,41 @@
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+
+:::warning Only one authentication plugin at a time
+The `iam` and `secrets_manager` plugins are mutually exclusive — only one authentication plugin may be active at a time. Configuring both in `{{ wrapper.pluginListParam }}` raises a `PluginConflictError` at connection initialization.
+:::
+{% for block in prerequisites %}
+
+{{ block }}
+{% endfor %}
+
+## Host requirements
+
+{{ plugin.hostRequirement }}
+
+## How to enable
+
+Add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+
+## Using IAM authentication with Global Databases
+
+{{ plugin.globalDatabases }}
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

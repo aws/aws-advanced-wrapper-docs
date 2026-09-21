@@ -1,0 +1,62 @@
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::note
+{{ plugin.note }}
+:::
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+
+```mermaid
+flowchart LR
+  App[User Application]
+
+  subgraph WRAPPER[{{ wrapper.wrapperName }}]
+    Plugin[Custom Endpoint Plugin]
+    Monitor[(Custom endpoint monitor)]
+  end
+
+  subgraph CLUSTER[Amazon Aurora Cluster]
+    subgraph CE[Custom endpoint member list]
+      InstanceA[(Instance A)]
+      InstanceB[(Instance B)]
+    end
+    InstanceC[(Instance C — not a member)]
+  end
+
+  App -->|Open or route a connection| Plugin
+  Plugin <-->|Fetch member list| Monitor
+  Monitor -.->|Describe custom endpoint| CLUSTER
+  Plugin -->|Allowed| InstanceA
+  Plugin -->|Allowed| InstanceB
+  Plugin -.->|Excluded| InstanceC
+```
+
+*The plugin keeps a cached view of the custom endpoint's member list, refreshed by a background monitor. Connections — including those opened during failover — are restricted to instances in the member list; instances outside it are excluded.*
+
+## How to enable
+
+1. If needed, [create a custom endpoint](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-custom-endpoint-creating.html) using the RDS Console.
+2. Add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter.
+3. Specify any parameters required for your case.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+{% for block in prerequisites %}
+
+{{ block }}
+{% endfor %}
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

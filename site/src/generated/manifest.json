@@ -1,0 +1,182 @@
+{
+  "wrappers": [
+    {
+      "id": "ruby",
+      "label": "Ruby",
+      "fullLabel": "Ruby"
+    }
+  ],
+  "pages": {
+    "overview": {
+      "path": "overview",
+      "title": "Overview",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": null,
+      "category": null
+    },
+    "setup": {
+      "path": "setup",
+      "title": "Set up by Scenario",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": null
+    },
+    "enhanced-failover": {
+      "path": "enhanced-failover",
+      "title": "Enhanced Failover Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/blue-green": {
+      "path": "using-plugins/blue-green",
+      "title": "Blue/Green Deployment Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/custom-endpoint": {
+      "path": "using-plugins/custom-endpoint",
+      "title": "Custom Endpoint Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/gdb-failover": {
+      "path": "using-plugins/gdb-failover",
+      "title": "Global Database Failover Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/iam-authentication": {
+      "path": "using-plugins/iam-authentication",
+      "title": "IAM Authentication Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/aws-secrets-manager": {
+      "path": "using-plugins/aws-secrets-manager",
+      "title": "AWS Secrets Manager Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/initial-connection-strategy": {
+      "path": "using-plugins/initial-connection-strategy",
+      "title": "Initial Connection Strategy Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/kms-encryption": {
+      "path": "using-plugins/kms-encryption",
+      "title": "KMS Encryption Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "configuring-tls": {
+      "path": "configuring-tls",
+      "title": "Configuring TLS/SSL",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Shared Configuration"
+    },
+    "aws-credentials": {
+      "path": "aws-credentials",
+      "title": "AWS Credentials",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Shared Configuration"
+    },
+    "host-selection-strategies": {
+      "path": "host-selection-strategies",
+      "title": "Host Selection Strategies",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Shared Configuration"
+    },
+    "development-guide/development-guide": {
+      "path": "development-guide/development-guide",
+      "title": "Development Guide",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Development Guide"
+    },
+    "development-guide/architecture": {
+      "path": "development-guide/architecture",
+      "title": "Architecture",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "development-guide/development-guide",
+      "category": "Development Guide"
+    },
+    "development-guide/service-container": {
+      "path": "development-guide/service-container",
+      "title": "Service Container",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "development-guide/architecture",
+      "category": "Development Guide"
+    },
+    "development-guide/pipelines": {
+      "path": "development-guide/pipelines",
+      "title": "Pipelines",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "development-guide/architecture",
+      "category": "Development Guide"
+    },
+    "development-guide/loadable-plugins": {
+      "path": "development-guide/loadable-plugins",
+      "title": "Loadable Plugins",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "development-guide/architecture",
+      "category": "Development Guide"
+    },
+    "development-guide/integration-tests": {
+      "path": "development-guide/integration-tests",
+      "title": "Integration Tests",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "development-guide/architecture",
+      "category": "Development Guide"
+    }
+  }
+}

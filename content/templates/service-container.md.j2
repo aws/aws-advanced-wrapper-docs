@@ -1,0 +1,115 @@
+{# Apache-2.0. Single-source Service Container page — values from content/dev-guide.yaml. #}
+---
+title: {{ page_title }}
+---
+
+# Service Container
+
+The {{ dg.containerName }} bundles the discrete services a plugin needs. A plugin reaches into the container to get the current connection, host/topology info, shared caches, background monitors, and events — instead of doing that work itself. Shared services are reused across connections; the rest are per-connection.
+
+```mermaid
+flowchart TB
+  plugin["Plugin<br/>(reaches into the container)"]
+
+  subgraph container["{{ dg.containerName | replace('`','') }}"]
+    direction TB
+    subgraph perconn["Per-connection services"]
+      direction LR
+{% for svc in dg.services %}{% if not svc.global %}
+{% if svc.short == dg.diagram.hostListProviderOwner %}
+      subgraph s{{ loop.index }}["{{ svc.short }}"]
+        hlp["Host List Provider"]
+      end
+{% else %}
+      s{{ loop.index }}["{{ svc.short }}"]
+{% endif %}
+{% endif %}{% endfor %}
+    end
+    subgraph shared["Shared / global services"]
+      direction LR
+{% for svc in dg.services %}{% if svc.global %}
+{% if svc.short == "Monitor Service" %}
+      subgraph s{{ loop.index }}["Monitor Service"]
+        mon["Background monitors<br/>(e.g. topology, blue/green)"]
+      end
+{% else %}
+      s{{ loop.index }}["{{ svc.short }}"]
+{% endif %}
+{% endif %}{% endfor %}
+    end
+  end
+
+  db[("Database / Aurora cluster")]
+
+  plugin --> container
+
+  %% The container's services operate on cached data and existing connections.
+  %% The code that opens its OWN connection to the database is a background
+  %% monitor (e.g. the topology monitor querying cluster topology).
+  mon -->|"separate connection: queries topology"| db
+```
+
+The {{ dg.productName }} groups its internal capabilities into a **service container** — a bundle of discrete services that plugins reach into instead of doing the work themselves. It includes a plugin manager that drives the [pipelines](./pipelines), a service that tracks the current connection and host list, a storage service for shared caches, a monitor service for background monitors, and an event publisher.
+
+{{ dg.containerIntro.strip() }}
+
+{{ dg.containerAccessExample.strip() }}
+
+## Available Services
+
+{% for svc in dg.services %}{% if svc.short != "Plugin Manager" %}
+### {{ svc.name }}
+
+{{ svc.summary.strip() }}
+
+**Access:** {{ svc.api }}
+
+**What it offers**
+
+{{ svc.offers.strip() }}
+
+**When to use it**
+
+{{ svc.whenToUse.strip() }}
+
+{% endif %}{% endfor %}
+### Plugin Manager
+
+The {{ dg.pluginManagerShort }} has the following main functionalities:
+
+- Load and initialize plugins
+- Initiate [pipelines](./pipelines)
+
+#### Load and Initialize Plugins
+
+The {{ dg.pluginManagerShort }} initializes all plugins registered via the {{ dg.pluginConfigParam }}.
+
+#### Initiate Pipelines
+
+During the initial connection phase, where the {{ dg.pluginManagerShort }} gets initialized, it initiates the host list provider and the connect pipeline. These two pipelines will set up a host list provider to be used by all the plugins and the initial connection. See [Pipelines](./pipelines) for how a call flows through the plugins.
+
+All subsequent {{ dg.methodTerm }} will trigger the execute pipeline.
+{% if dg.pluginManagerNotes %}
+
+{{ dg.pluginManagerNotes.strip() }}
+{% endif %}
+
+## Host List Providers
+
+Plugins should not track host information themselves. Instead, the service container uses a **host list provider** to retrieve the most recent host or topology information about the database, and notifies it to refresh when needed.
+
+The {{ dg.productName }} has two host list providers, the `{{ dg.staticHostListProvider }}` and the `{{ dg.hostListProvider }}`.
+
+The `{{ dg.hostListProvider }}` provides information about the Aurora cluster. It uses an internal monitoring connection to track the available hosts and their roles in the cluster.
+
+The `{{ dg.staticHostListProvider }}` is a static host list provider, whereas the `{{ dg.hostListProvider }}` is a dynamic host list provider. A static host list provider will fetch the host list during initialization and does not update the host list afterwards, whereas a dynamic host list provider will update the host list information based on database status.
+
+Which provider is used is decided by the resolved database dialect, not by the raw URL. The `{{ dg.staticHostListProvider }}` is used for the non-cluster dialects ({{ dg.staticDialectCodes | map('wrapcode') | join(', ') }}), whereas the dynamic `{{ dg.hostListProvider }}` is used for the cluster dialects; it lazily starts a `{{ dg.topologyMonitor }}` (via the shared `MonitorService`) that caches topology in the `StorageService`.{% if dg.globalHostListProvider %} Aurora Global Database dialects use `{{ dg.globalHostListProvider }}`, a topology-aware variant of `{{ dg.hostListProvider }}`.{% endif %}
+
+The dialect codes that select the dynamic, topology-aware provider are:
+
+{% for group in dg.dialectHostListProviders %}
+- {{ group.codes | map('wrapcode') | join(' / ') }} — {{ group.label }}
+{% endfor %}
+
+Because the dialect is refined after the first connection, connecting to an **instance** endpoint of one of these clusters starts out on the `{{ dg.staticHostListProvider }}` and is then upgraded to the topology-aware provider once the wrapper queries the server and detects the cluster dialect on that first connect. To skip that detection step and use the topology-aware provider immediately, set the database dialect explicitly with the dialect connection parameter.

@@ -1,0 +1,428 @@
+/* ConfigBuilder styles. Uses Infima variables so light and dark both work. */
+
+.builder {
+  margin: 1.5rem 0 3rem;
+}
+
+/* ---------- sticky axis strip ---------- */
+
+.axisBar {
+  position: sticky;
+  top: var(--ifm-navbar-height);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1rem;
+  margin-bottom: 1.5rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.axis {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.axisLabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ifm-color-emphasis-700);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.axisSpacer {
+  flex: 1;
+}
+
+.deployment {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-800);
+  background: var(--ifm-color-emphasis-100);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 20px;
+  padding: 0.2rem 0.7rem;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg,
+.segOn {
+  padding: 0.3rem 0.8rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  border: 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ifm-font-color-base);
+}
+
+.seg:hover {
+  background: var(--ifm-color-emphasis-200);
+}
+
+.segOn {
+  background: var(--ifm-color-primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- question rows ---------- */
+
+.row {
+  padding: 1.4rem 0 1.6rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.rowHead {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.rowNum,
+.rowNumPlus {
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: var(--ifm-color-primary);
+  color: #fff;
+}
+
+.rowNumPlus {
+  background: var(--ifm-color-emphasis-600);
+}
+
+.rowTitle {
+  margin: 0.1rem 0 0.3rem;
+  font-size: 1.3rem;
+  line-height: 1.25;
+}
+
+.body {
+  margin: 0;
+  color: var(--ifm-color-emphasis-800);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.notice {
+  margin: 0 0 0.9rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+  border-left: 3px solid var(--ifm-color-warning-dark);
+  background: var(--ifm-color-warning-contrast-background);
+  color: var(--ifm-color-warning-contrast-foreground);
+  border-radius: 0 4px 4px 0;
+}
+
+.noticeWhy {
+  opacity: 0.85;
+  font-style: italic;
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.optionItem {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  text-align: left;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--ifm-background-surface-color);
+  border: 0;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  transition: background 120ms ease;
+}
+
+.optionItem:first-child {
+  border-top: 0;
+}
+
+.optionItem:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.optionItemOn {
+  background: var(--ifm-color-primary-contrast-background);
+}
+
+.optionItemOn:hover {
+  background: var(--ifm-color-primary-contrast-background);
+}
+
+.optionItemOff {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.optionItemOff:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.checkMark {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  border: 1.5px solid var(--ifm-color-emphasis-400);
+  border-radius: 4px;
+  background: var(--ifm-background-color);
+}
+
+.optionItemOn .checkMark {
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+}
+
+/* Circular indicator for single-select (radio) controls. */
+.radioMark {
+  border-radius: 50%;
+}
+
+/* When a radio is on, show a filled dot rather than a check glyph.
+   The dot is drawn with an inner box-shadow so it stays centered. */
+.optionItemOn .radioMark {
+  background: var(--ifm-background-color);
+  border-color: var(--ifm-color-primary);
+  box-shadow: inset 0 0 0 4px var(--ifm-color-primary);
+}
+
+/* Square indicator for multi-select (checkbox) controls (default shape). */
+.checkboxMark {
+  border-radius: 4px;
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.optionLabel {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ifm-font-color-base);
+}
+
+.optionHint {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.optionBlocked {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* ---------- add-ons ---------- */
+
+.addonList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.addonGroup,
+.addonGroupOff {
+  display: flex;
+  flex-direction: column;
+}
+
+.addonGroupOff {
+  opacity: 0.6;
+}
+
+.addonGroupTitle {
+  font-weight: 700;
+  font-size: 0.98rem;
+  margin-bottom: 0.25rem;
+}
+
+.addonBody {
+  margin: 0 0 0.6rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.addonBlocked {
+  margin: 0;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--ifm-color-emphasis-600);
+}
+
+.check,
+.checkOff {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.checkOff {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.check input,
+.checkOff input {
+  margin-top: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.checkHint,
+.checkBlocked {
+  display: block;
+  font-size: 0.82rem;
+  font-style: normal;
+  line-height: 1.4;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.checkBlocked {
+  font-style: italic;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* ---------- result ---------- */
+
+.result {
+  margin-top: 1.5rem;
+  padding: 1.5rem 1.6rem 1.8rem;
+  border: 2px solid var(--ifm-color-primary);
+  border-radius: 10px;
+  background: var(--ifm-background-surface-color);
+}
+
+.resultHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.resultKicker {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+}
+
+.resultTitle {
+  margin: 0.2rem 0 0.6rem;
+  font-size: 1.5rem;
+}
+
+.resultActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.linkBtn {
+  padding: 0.35rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--ifm-color-primary);
+  background: transparent;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 6px;
+}
+
+.linkBtn:hover {
+  background: var(--ifm-color-primary-contrast-background);
+}
+
+.description {
+  margin: 0 0 1.2rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.h4 {
+  margin: 1.6rem 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+.list li {
+  margin-bottom: 0.35rem;
+}
+
+.file {
+  margin-top: 1.1rem;
+}
+
+.caption {
+  margin: -0.6rem 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.table {
+  display: table;
+  width: 100%;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .axisBar {
+    position: static;
+  }
+
+  .options,
+  .addons {
+    grid-template-columns: 1fr;
+  }
+}

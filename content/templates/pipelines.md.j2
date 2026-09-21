@@ -1,0 +1,126 @@
+{# Apache-2.0. Single-source Pipelines page — values from content/dev-guide.yaml. #}
+---
+title: {{ page_title }}
+---
+
+# Pipelines
+
+A pipeline corresponds to a method that plugins can [subscribe](./loadable-plugins#subscribed-methods) to. Only the plugins subscribed to that pipeline take part in it — a call is routed left-to-right through each subscribed plugin and finally to `{{ dg.diagram.terminusPlugin }}`, which performs the underlying work. Each plugin can run logic before and after handing off to the next plugin.
+
+The diagram shows the **connect** and **execute** pipelines. `Plugin A` and `Plugin B` stand in for whichever plugins are subscribed to that pipeline; a given plugin only appears in the pipelines it actually subscribes to.
+
+```mermaid
+flowchart LR
+  pm["{{ dg.pluginManagerTitle }}"]
+
+  subgraph connect["Connect pipeline"]
+    direction LR
+    pm -->|"{{ dg.diagram.connectPipelineLabel }}"| c0
+{% for p in dg.diagram.samplePlugins %}
+    c{{ loop.index0 }}["{{ p }}"] -->|"{{ dg.diagram.connectPipelineLabel }}"| c{{ loop.index }}
+{% endfor %}
+    c{{ dg.diagram.samplePlugins | length }}["{{ dg.diagram.terminusPlugin }}"]
+{% for p in dg.diagram.samplePlugins %}
+    c{{ dg.diagram.samplePlugins | length - loop.index0 }} -.->|result| c{{ dg.diagram.samplePlugins | length - loop.index }}
+{% endfor %}
+    c0 -.->|result| pm
+  end
+
+  subgraph execute["Execute pipeline"]
+    direction LR
+    pm -->|"{{ dg.diagram.executePipelineLabel }}"| e0
+{% for p in dg.diagram.samplePlugins %}
+    e{{ loop.index0 }}["{{ p }}"] -->|"{{ dg.diagram.executePipelineLabel }}"| e{{ loop.index }}
+{% endfor %}
+    e{{ dg.diagram.samplePlugins | length }}["{{ dg.diagram.terminusPlugin }}"]
+{% for p in dg.diagram.samplePlugins %}
+    e{{ dg.diagram.samplePlugins | length - loop.index0 }} -.->|result| e{{ dg.diagram.samplePlugins | length - loop.index }}
+{% endfor %}
+    e0 -.->|result| pm
+  end
+```
+
+The dashed **result** arrows show the return path: once `{{ dg.diagram.terminusPlugin }}` does the underlying work, the result travels back out through each plugin, so a plugin can also run logic after the next plugin returns.
+
+A plugin pipeline is an execution workflow achieving a specific goal.
+
+The plugin pipelines available in the wrapper are:
+
+{{ dg.pipelineList.strip() }}
+
+A plugin does not need to implement all pipelines. A plugin can implement one or more pipelines depending on its functionality.
+
+For information on how to subscribe to these pipelines, please see the documentation on [subscribed methods](./loadable-plugins#subscribed-methods).
+
+## Connect Pipeline
+
+The connect pipeline performs any additional setup or post connection steps required to establish a {{ dg.connectionShort }}. {{ dg.connectProviderProse.strip() }}
+
+The most common usage of the connect pipeline is to fetch extra credentials from external locations.
+
+An example would be the IAM connection plugin. The IAM connection plugin generates an IAM authentication token to be used when establishing a connection. Since authentication is only required when establishing a {{ dg.connectionShort }} and not required for any subsequent execution, the IAM authentication plugin only needs to implement the connect pipeline.
+
+## {{ dg.secondConnectHeading }}
+
+{{ dg.secondConnectProse.strip() }}
+
+## Execute Pipeline
+
+The execute pipeline performs additional work for {{ dg.methodTerm }}. This pipeline is not limited to query execution methods, it may be called for any subscribed method — for example connection utility methods such as {{ dg.utilityMethodExamples }}.
+
+Usages for this pipeline include:
+
+- handling execution exceptions
+- logging and measuring execution information
+- caching execution results
+- updating the host lists before executing the method
+- catching network exceptions and performing the failover procedure
+{% if dg.extendedPipelines %}
+
+## Host List Provider Pipeline
+
+The host list provider pipeline sets up the [host list provider](./service-container#host-list-providers) via the service container.
+This pipeline is executed once during the initialization stage of the connection.
+
+All subscribed plugins are called to set up their respective host list provider.
+Since each connection may only have one host list provider,
+setting a host list provider would override any previously set host list providers.
+
+The host list providers are used to retrieve host information about the database server,
+either from the connection string or by querying the database server.
+For simple use cases where having up-to-date information on all existing database replicas is not necessary,
+using a simple host list provider such as the connection string host list provider would be sufficient.
+The connection string host list provider simply parses the host and port information from the connection string during initialization,
+it does not perform any additional work.
+
+For cases where keeping updated information on existing and available replicas is necessary,
+such as during the failover procedure, it is important to have a host list provider that can re-fetch information once in a while,
+like the {{ dg.hostListProvider }}.
+The {{ dg.hostListProvider }} should be automatically used by the wrapper when the application is connecting to Aurora databases.
+However, you can ensure that the provider is used by specifying a topology-aware dialect. For more information, see [Database Dialects]({{ dg.dialectsLink }}).
+
+## Connection Changed Notification Pipeline
+
+Plugins can subscribe to this pipeline to perform special handling when the current connection has changed. Once
+subscribed, plugins should override the `{{ dg.notifyConnChangedKey }}` method to implement any desired logic. This method
+will be called whenever the current connection changes. Plugins can also provide suggestions of what to do with the old
+connection by returning a suggested action.
+
+## Host List Changed Notification Pipeline
+
+Plugins can subscribe to this pipeline to perform special handling when the current host list of databases has changed.
+Once subscribed, plugins should override the `{{ dg.hostListNotifyName }}` method to implement any desired logic. This method
+will be called whenever changes in the current host list are detected.
+
+## Accepts Strategy Pipeline
+
+Plugins should subscribe to this pipeline and the {{ dg.hostSpecByStrategyName }} pipeline if they implement a host selection strategy via the `{{ dg.hostSpecByStrategyName }}` method. In this case, plugins should override the `{{ dg.acceptsStrategyName }}` and `{{ dg.hostSpecByStrategyName }}` methods to implement any desired logic. The `{{ dg.acceptsStrategyName }}` method should return true for each selection strategy that the plugin supports.
+
+## Get Host by Strategy Pipeline
+
+Plugins should subscribe to this pipeline and the accepts strategy pipeline if they implement a host selection strategy. In this case, plugins should override both the `{{ dg.acceptsStrategyName }}` method and the `{{ dg.hostSpecByStrategyName }}` method. The `{{ dg.hostSpecByStrategyName }}` method should implement the desired logic for selecting a host using any plugin-accepted strategies. Host selection via a "random" strategy is supported by default.
+{% endif %}
+{% if dg_only %}
+
+{{ dg_only.strip() }}
+{% endif %}

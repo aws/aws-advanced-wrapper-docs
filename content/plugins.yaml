@@ -1,0 +1,1245 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License").
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ===========================================================================
+# RULE — READ BEFORE EDITING
+# ---------------------------------------------------------------------------
+# EACH WRAPPER'S DOCS ARE STANDALONE. NO CROSS-WRAPPER REFERENCES.
+# Text rendered into a wrapper's page must never mention, name, compare to, or
+# imply another wrapper. A wrapper naming ITSELF is fine ("Ruby"). These
+# non-rendered maintainer comments MAY reference the wrapper.
+#
+# This is the single source of truth for the shared plugin pages. The build
+# reads it and produces one clean, wrapper-specific page per wrapper, so a
+# parameter name/unit/default cannot drift between prose and table.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Parameter TYPE display map (canonical -> per-wrapper spelling).
+# ---------------------------------------------------------------------------
+typeNames:
+  string:
+    ruby: "String"
+  boolean:
+    ruby: "Boolean"
+  integer:
+    ruby: "Integer"
+  float:
+    ruby: "Float"
+  long:
+    ruby: "Integer"
+  symbol:
+    ruby: "Symbol"
+  object:
+    ruby: "Object"
+
+# ---------------------------------------------------------------------------
+# Per-wrapper metadata reused by every plugin page. Merged into the base
+# wrapper context by the `plugins` context profile.
+# ---------------------------------------------------------------------------
+wrappers:
+  ruby:
+    wrapperName: "AWS Advanced Ruby Driver Wrapper"
+    label: "Ruby"
+    codeLang: "ruby"
+    pluginListParam: "wrapper_plugins"
+
+# ---------------------------------------------------------------------------
+# Plugin registry.
+#
+# Each entry is keyed by the page's path last segment (e.g. `iam-authentication`
+# for `using-plugins/iam-authentication`). The `plugins` context profile picks
+# the entry, filters everything to the current wrapper, and exposes it to the
+# template as `plugin`.
+#
+# Per plugin:
+#   availableWrappers : wrappers this page renders for (must match pages.yaml).
+#   code              : per-wrapper plugin code for the plugin list parameter.
+#   availableSince    : per-wrapper "Available since" string.
+#   enableSnippet     : per-wrapper connection snippet enabling the plugin.
+#   parameters[]      : each has type, per-wrapper availability + spellings
+#                       (name/required/default/example) and a shared or
+#                       per-wrapper description.
+#   wrapperOnly       : per-wrapper appended prose blocks (verbatim from the
+#                       source docs, so wrapper-specific notes are preserved).
+# ===========================================================================
+
+plugins:
+
+  # =========================================================================
+  # IAM Authentication Plugin
+  # =========================================================================
+  iam-authentication:
+    availableWrappers: [ruby]
+    intro: |
+      AWS Identity and Access Management (IAM) grants users access control across
+      AWS services with granular permissions. The IAM Authentication Plugin enables
+      [IAM database authentication](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html)
+      for connections: instead of a static password, the plugin generates a
+      short-lived IAM authentication token and injects it into the connection
+      properties before each connection attempt. For more information on IAM, see
+      the [IAM documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html).
+    code:
+      ruby: iam
+    pluginGroup: auth
+    availableSince:
+      ruby: "1.0.0"
+    hostRequirement: |
+      When using IAM database authentication, the connection host must be a valid
+      Amazon RDS endpoint — not a custom domain or an IP address — for example
+      `my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com`. When connecting
+      through a custom Aurora cluster endpoint, set the host override parameter to a
+      valid RDS endpoint instead. IAM database authentication is limited to certain database
+      engines; see the
+      [IAM database authentication documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html).
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          user: "iam_user",
+          wrapper_plugins: "iam",
+          sslmode: "verify-full",
+          sslrootcert: "/path/to/global-bundle.pem"
+        )
+    parameters:
+      - concept: iamHost
+        type: string
+        description: "Overrides the hostname used to generate the IAM token. Required when connecting through a custom endpoint. The default is derived from the connection host."
+        spellings:
+          ruby: { name: iam_host, required: "No", defaultNote: "derived from host", example: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com" }
+      - concept: iamPort
+        type: integer
+        description: "Overrides the port used to generate the IAM token. The default is determined from the underlying driver protocol or the dialect default."
+        spellings:
+          ruby: { name: iam_port,       required: "No", defaultNote: "dialect default", example: "5432" }
+      - concept: iamRegion
+        type: string
+        description: "Overrides the AWS region used to generate the IAM token. The default is parsed from the connection string."
+        spellings:
+          ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
+      - concept: iamExpiration
+        type: integer
+        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated, keep this roughly 30 seconds below the token lifetime. By default, IAM database authentication tokens have a lifetime of 15 minutes (900 seconds), so the wrapper's default `870.0` leaves the recommended 30-second safety margin so a cached token is never used after it expires."
+        spellings:
+          ruby: { name: iam_expiration_sec, type: float, required: "No", default: "870.0", unit: s, example: "600.0" }
+      - concept: iamTokenProperty
+        type: symbol
+        description: "The connection property name the generated token is injected into. Some underlying drivers require a specific property name for the token."
+        spellings:
+          ruby: { name: iam_access_token_property_name, required: "No", default: ":password", example: ":password" }
+      - concept: awsCredentialsProvider
+        type: object
+        availability: { ruby: true }
+        description: "A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
+        spellings:
+          ruby: { name: aws_credentials_provider, required: "No", defaultNote: "SDK default chain", example: "Aws::AssumeRoleCredentials.new(...)" }
+    globalDatabases: |
+      When using IAM authentication with
+      [Amazon Aurora Global Databases](https://aws.amazon.com/rds/aurora/global-database/),
+      the IAM user or role requires the additional `rds:DescribeGlobalClusters`
+      permission so the token-generation path can resolve the writer region.
+
+      ```json
+      {
+          "Version": "2012-10-17",
+          "Statement": [
+              {
+                  "Effect": "Allow",
+                  "Action": [
+                      "rds-db:connect",
+                      "rds:DescribeGlobalClusters"
+                  ],
+                  "Resource": "*"
+              }
+          ]
+      }
+      ```
+    prereqCount:
+      ruby: 3
+    wrapperOnly:
+      ruby:
+        - |
+          ## Prerequisites
+
+          :::warning
+          To use this plugin, add `aws-sdk-rds` to your Gemfile:
+
+          ```ruby
+          gem 'aws-sdk-rds'
+          ```
+          :::
+
+          :::warning
+          To use this plugin, you must provide valid AWS credentials through the AWS
+          SDK credential provider chain. Temporary credentials (AWS STS, IAM roles,
+          SSO) expire, so ensure your provider refreshes them before they lapse to
+          avoid authentication failures. For more information, see the
+          [AWS credentials documentation](https://docs.aws.amazon.com/sdk-for-ruby/v3/developer-guide/setup-config.html).
+          :::
+
+          Then enable IAM database authentication on your RDS or Aurora instance,
+          create an [IAM policy](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.IAMPolicy.html)
+          granting `rds-db:connect`, and create a database account mapped to IAM:
+
+          - MySQL: `CREATE USER iam_user IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';`
+          - PostgreSQL: `CREATE USER iam_user; GRANT rds_iam TO iam_user;`
+        - |
+          ## Use TLS/SSL with IAM authentication
+
+          :::warning
+          It is strongly recommended to use a **TLS/SSL 1.2+ connection** with IAM
+          database authentication. IAM tokens are sent as passwords, and SSL ensures
+          they are encrypted in transit.
+          :::
+
+          **MySQL (`mysql2`):**
+
+          ```ruby
+          AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
+            host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+            username: "iam_user",
+            wrapper_plugins: "iam",
+            enable_cleartext_plugin: true,
+            sslca: "/path/to/global-bundle.pem",
+            ssl_mode: "verify_identity"
+          )
+          ```
+
+          **PostgreSQL (`pg`):**
+
+          ```ruby
+          AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+            host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+            user: "iam_user",
+            wrapper_plugins: "iam",
+            sslmode: "verify-full",
+            sslrootcert: "/path/to/global-bundle.pem"
+          )
+          ```
+
+          When connecting directly to an RDS or Aurora endpoint, use the AWS global
+          certificate bundle from the
+          [RDS SSL/TLS documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html).
+
+          If you connect through something that is not an RDS endpoint — a proxy, or your
+          own domain name — two things change together. Set `iam_host` to a valid Amazon
+          RDS endpoint so the token is generated for the right host, and supply the
+          certificate authority appropriate for the endpoint you are *connecting* to
+          rather than the one you are generating the token for.
+
+          For the full picture, including what the wrapper does and does not enforce, see
+          [Configuring TLS/SSL](../configuring-tls).
+        - |
+          ## MySQL requires the cleartext plugin
+
+          :::caution
+          **MySQL requires `enable_cleartext_plugin: true`.** RDS/Aurora MySQL IAM
+          authentication relies on the MySQL `mysql_clear_password` client plugin,
+          because the IAM token must be sent to the server in cleartext. The wrapper
+          does **not** set this for you, so pass `enable_cleartext_plugin: true` when
+          using the plugin with MySQL. Because the token is sent in cleartext, you
+          must also use a TLS/SSL connection so it is encrypted in transit. This does
+          not apply to PostgreSQL (`pg`).
+          :::
+        - |
+          ## Token caching
+
+          The plugin caches generated tokens keyed by `region:host:port:user`. A
+          cached token is reused until it expires (controlled by `iam_expiration_sec`).
+          If a login error occurs with a cached token, the plugin automatically
+          fetches a fresh token and retries the connection once.
+
+          ## Related
+
+          - [AWS Credentials](../aws-credentials) — the plugin calls RDS to generate each
+            token, so it needs credentials the SDK can refresh.
+          - [Configuring TLS/SSL](../configuring-tls) — the token is sent as the password,
+            and on MySQL it is sent in cleartext.
+
+  # =========================================================================
+  # AWS Secrets Manager Plugin
+  # =========================================================================
+  aws-secrets-manager:
+    availableWrappers: [ruby]
+    intro: |
+      The AWS Secrets Manager Plugin allows connections to use database credentials
+      stored as secrets in [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/).
+      When a new connection is created with this plugin enabled, the plugin
+      retrieves the secret and creates the connection with the credentials inside
+      it.
+    code:
+      ruby: secrets_manager
+    pluginGroup: auth
+    availableSince:
+      ruby: "1.0.0"
+    secretData: |
+      The secret stored in AWS Secrets Manager should be a JSON object containing
+      the `username` and `password` keys. If the secret uses different key names,
+      specify them with the username and password key parameters.
+
+      A Secret ARN has the format
+      `arn:aws:secretsmanager:<Region>:<AccountId>:secret:SecretName-6RandomCharacters`.
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "secrets_manager",
+          secret_id: "my-db-secret",
+          secret_region: "us-east-1"
+        )
+    parameters:
+      - concept: secretId
+        type: string
+        description: "The name or ARN of the secret to retrieve."
+        spellings:
+          ruby: { name: secret_id,              required: "Yes", defaultNote: "none", example: "my-db-secret" }
+      - concept: secretRegion
+        type: string
+        description: "The AWS region the secret is in. When the secret id is an ARN, the region is parsed from it automatically."
+        spellings:
+          ruby: { name: secret_region,        required: "Yes, unless the secret id is an ARN", defaultNote: "none", example: "us-east-1" }
+      - concept: secretEndpoint
+        type: string
+        description: "Endpoint URL override used to retrieve the secret. Must include a valid protocol (for example `http://`) and domain. A port is not required."
+        spellings:
+          ruby: { name: secret_endpoint,        required: "No", defaultNote: "none", example: "http://localhost:1234" }
+      - concept: secretExpiration
+        type: integer
+        description: "Time in seconds that secrets are cached before being re-fetched. When the credentials have a bounded lifetime (for example a rotation schedule), keep this comfortably below that lifetime — roughly 30 seconds less — so a rotated secret is picked up before the cached copy goes stale. The minimum accepted value is `300.0`."
+        spellings:
+          ruby: { name: secret_expiration_sec,           type: float, required: "No", default: "870.0", unit: s, example: "600.0 (minimum 300.0)" }
+      - concept: secretUsernameKey
+        type: string
+        description: "The key in the JSON secret that contains the username for the database connection."
+        spellings:
+          ruby: { name: secret_username_key,                  required: "No", default: "username", example: "writerUsername" }
+      - concept: secretPasswordKey
+        type: string
+        description: "The key in the JSON secret that contains the password for the database connection."
+        spellings:
+          ruby: { name: secret_password_key,                  required: "No", default: "password", example: "readerPassword" }
+      - concept: awsCredentialsProvider
+        type: object
+        availability: { ruby: true }
+        description: "A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
+        spellings:
+          ruby: { name: aws_credentials_provider, required: "No", defaultNote: "SDK default chain", example: "Aws::AssumeRoleCredentials.new(...)" }
+      - concept: secretRetryTimeout
+        type: long
+        availability: { ruby: true }
+        description: "Time budget for the exponential-backoff retry loop used to bridge an in-progress secret rotation, re-fetching the credentials before each retry. `0` (the default) disables this timed retry loop; the plugin still performs a single forced re-fetch and one retry when a connection fails to authenticate with the cached secret."
+        spellings:
+          ruby: { name: secret_rotation_retry_timeout_sec,   type: float, required: "No", default: "0.0", unit: s, example: "30.0" }
+      - concept: secretRetryInterval
+        type: long
+        availability: { ruby: true }
+        description: "Initial delay before a failed connection is retried. The delay grows exponentially between attempts. Only used when the retry timeout is greater than `0`."
+        spellings:
+          ruby: { name: secret_rotation_retry_base_delay_sec, type: float, required: "No", default: "0.5",  unit: s, example: "1.0" }
+    prereqCount:
+      ruby: 1
+    wrapperOnly:
+      ruby:
+        - |
+          ## Prerequisites
+
+          :::warning
+          To use this plugin, add `aws-sdk-secretsmanager` to your Gemfile:
+
+          ```ruby
+          gem 'aws-sdk-secretsmanager'
+          ```
+          :::
+
+          :::warning
+          To use this plugin, you must provide valid AWS credentials through the AWS
+          SDK credential provider chain. Temporary credentials (AWS STS, IAM roles,
+          SSO) expire, so ensure your provider refreshes them, monitor expiration in
+          production, and handle credential-related failures.
+          :::
+
+          See [AWS Credentials](../aws-credentials) for which credential sources the SDK
+          refreshes automatically and which it does not.
+        - |
+          ## Secret rotation
+
+          AWS Secrets Manager does not require credential rotation, and the wrapper does
+          not enforce it. We recommend enabling
+          [automatic rotation](https://docs.aws.amazon.com/secretsmanager/latest/userguide/rotating-secrets.html)
+          anyway, so that credentials change on a schedule and a leaked secret has a
+          bounded lifetime.
+
+          The plugin is built to keep working across a rotation:
+
+          - Retrieved credentials are cached for `secret_expiration_sec` (`870.0` seconds by
+            default) and then re-fetched, so a rotated secret is picked up on its own once
+            the cache entry expires.
+          - If a connection fails to authenticate with the cached credentials, the plugin
+            forces an immediate re-fetch and retries once. This happens regardless of
+            `secret_rotation_retry_timeout_sec` and covers the common case where the
+            rotation happened between two connections.
+          - For the brief window while a rotation is actually in progress, set
+            `secret_rotation_retry_timeout_sec` to a non-zero value and the plugin instead
+            re-fetches and reconnects repeatedly with exponential backoff — tunable through
+            `secret_rotation_retry_base_delay_sec` — until login succeeds or the time
+            budget is exhausted. This bridges the gap until the newly rotated credentials
+            become valid. The default of `0` disables this timed loop, leaving the single
+            forced re-fetch and retry described above.
+
+          ## Related
+
+          - [Configuring TLS/SSL](../configuring-tls) — the retrieved password travels over
+            the connection like any other password, so verify the server and encrypt the
+            traffic.
+          - [AWS Credentials](../aws-credentials) — what this plugin needs in order to call
+            Secrets Manager.
+
+  # =========================================================================
+  # KMS Encryption Plugin
+  # =========================================================================
+  kms-encryption:
+    availableWrappers: [ruby]
+    intro: |
+      The KMS Encryption Plugin provides transparent client-side, column-level
+      encryption using [AWS Key Management Service (KMS)](https://aws.amazon.com/kms/).
+      It encrypts sensitive column values before they are stored in the database and
+      decrypts them when they are read back, based on metadata configured in the
+      database rather than in application code. The plaintext never reaches the
+      server, and neither does any data key: only a KMS-encrypted copy of each data
+      key is stored.
+
+      :::warning
+      **A database-side HMAC-validation trigger is required on every encrypted
+      column.** On its own, the plugin cannot guarantee that an encrypted column never
+      holds a plaintext value — it only sees statements sent over a connection with the
+      plugin enabled, and it identifies encrypted columns by best-effort SQL parsing.
+      The server-side trigger, not the SQL parser, is what guarantees an encrypted
+      column never holds plaintext. See [Server-side enforcement is required](#server-side-enforcement-is-required)
+      and [Enforce encryption in the database](#enforce-encryption-in-the-database) below.
+      :::
+    code:
+      ruby: kms_encryption
+    availableSince:
+      ruby: "1.0.0"
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "kms_encryption",
+          encryption_kms_region: "us-east-1",
+          encryption_audit_logging_enabled: true
+        )
+    parameters:
+      - concept: kmsRegion
+        type: string
+        description: "AWS region for KMS encryption operations."
+        spellings:
+          ruby: { name: encryption_kms_region, required: "Yes", defaultNote: "AWS_REGION env var", example: "us-east-1" }
+      - concept: kmsEndpoint
+        type: string
+        availability: { ruby: true }
+        description: "Endpoint URL override for KMS."
+        spellings:
+          ruby: { name: encryption_kms_endpoint, required: "No", defaultNote: "none", example: "http://localhost:4566" }
+      - concept: metadataSchema
+        type: string
+        description: "Schema (or database, on MySQL) holding the `encryption_metadata` and `key_storage` tables."
+        spellings:
+          ruby: { name: encryption_metadata_schema, required: "No", default: "encrypt", example: "app_encrypt" }
+      - concept: metadataCacheEnabled
+        type: boolean
+        description: "Cache the encryption metadata in memory. Leave enabled in production; when disabled, a short-lived metadata connection is opened for every statement that touches an encrypted column."
+        spellings:
+          ruby: { name: encryption_metadata_cache_enabled, required: "No", default: "true", example: "true" }
+      - concept: metadataCacheExpiration
+        type: integer
+        description: "How long cached encryption metadata stays valid."
+        spellings:
+          ruby: { name: encryption_metadata_cache_expiration_sec, type: float, required: "No", default: "3600.0", unit: s, example: "600.0" }
+      - concept: metadataCacheRefresh
+        type: integer
+        description: "How often the encryption metadata is refreshed in the background."
+        spellings:
+          ruby: { name: encryption_metadata_cache_refresh_interval_sec, type: float, required: "No", default: "300.0", unit: s, example: "60.0" }
+      - concept: dataKeyCacheEnabled
+        type: boolean
+        description: "Cache decrypted data keys in memory. Leave enabled in production; when disabled, a KMS `Decrypt` call is made for every statement that touches an encrypted column."
+        spellings:
+          ruby: { name: encryption_data_key_cache_enabled, required: "No", default: "true", example: "true" }
+      - concept: dataKeyCacheMaxSize
+        type: integer
+        description: "Maximum number of decrypted data keys held in memory."
+        spellings:
+          ruby: { name: encryption_data_key_cache_max_size, required: "No", default: "1000", example: "100" }
+      - concept: dataKeyCacheExpiration
+        type: integer
+        description: "How long a decrypted data key stays cached."
+        spellings:
+          ruby: { name: encryption_data_key_cache_expiration_sec, type: float, required: "No", default: "300.0", unit: s, example: "600.0" }
+      - concept: keyMgmtMaxRetries
+        type: integer
+        description: "Maximum number of retries for throttled or failed key-management (KMS) operations."
+        spellings:
+          ruby: { name: encryption_key_management_max_retries, required: "No", default: "3", example: "5" }
+      - concept: keyMgmtBackoff
+        type: integer
+        description: "Base delay for the exponential backoff between key-management (KMS) retries."
+        spellings:
+          ruby: { name: encryption_key_management_retry_backoff_base_sec, type: float, required: "No", default: "0.1", unit: s, example: "0.25" }
+      - concept: auditLogging
+        type: boolean
+        description: "Log an audit record for every key-management, encryption, and decryption operation."
+        spellings:
+          ruby: { name: encryption_audit_logging_enabled, required: "No", default: "false", example: "true" }
+      - concept: awsCredentialsProvider
+        type: object
+        availability: { ruby: true }
+        description: "A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
+        spellings:
+          ruby: { name: aws_credentials_provider, required: "No", defaultNote: "SDK default chain", example: "Aws::AssumeRoleCredentials.new(...)" }
+      - concept: returnUnverified
+        type: boolean
+        availability: { ruby: true }
+        description: "**Do not enable in production.** On read, return a value as stored when it cannot be confirmed to be this column's encrypted data instead of raising. Intended only for reading data written before the column was encrypted."
+        spellings:
+          ruby: { name: encryption_return_unverified_data, required: "No", default: "false", example: "false" }
+    prereqCount:
+      ruby: 1
+    wrapperOnly:
+      ruby:
+        - |
+          ## Prerequisites
+
+          :::warning
+          To use this plugin, add `aws-sdk-kms` to your Gemfile:
+
+          ```ruby
+          gem 'aws-sdk-kms'
+          ```
+          :::
+
+          :::warning
+          To use this plugin, you must provide valid AWS credentials through the AWS
+          SDK credential provider chain. Temporary credentials (AWS STS, IAM roles,
+          SSO) expire, so ensure your provider refreshes them before they lapse.
+          :::
+
+          The plugin expects two tables in the schema named by
+          `encryption_metadata_schema`: `encryption_metadata`, which records the
+          encrypted columns, and `key_storage`, which holds each KMS-encrypted data
+          key alongside the HMAC key that signs its values. Every encrypted column
+          must be a binary column (`bytea` on PostgreSQL, `VARBINARY` or `BLOB` on
+          MySQL). Manage columns and keys through
+          `Plugins::Encryption::KeyManagementUtility` rather than editing the tables
+          by hand; a column is only usable once a matching data key exists in
+          `key_storage`.
+        - |
+          ## Server-side enforcement is required
+
+          :::warning
+          On its own, the plugin cannot guarantee that an encrypted column never holds
+          a plaintext value: it only sees statements this wrapper sends over a
+          connection with the plugin enabled, and it identifies which columns to
+          encrypt by best-effort SQL parsing. A database-side HMAC-validation trigger
+          is **required** on every encrypted column to prevent plaintext writes. The
+          server-side trigger — not the SQL parser — is what guarantees an encrypted
+          column never holds plaintext.
+          :::
+
+          The plugin treats reads and writes differently. A **read fails closed**: a
+          value that does not verify (not a valid encrypted payload, or a failed HMAC)
+          raises `Errors::EncryptionError` rather than being handed back. A **write**
+          mostly stays out of the way and leaves the value to the server-side
+          enforcement, with one exception — it **fails closed** with
+          `Errors::MetadataError` when it can confirm a column is encrypted and sees
+          the statement writing it with something other than a bind parameter.
+        - |
+          ## Paths that are covered
+
+          Encryption applies to **bind parameters**, so a value can be encrypted only
+          when it is bound rather than written into the SQL text:
+
+          ```ruby
+          # pg
+          conn.exec_params('INSERT INTO users (name, ssn) VALUES ($1, $2)', ['Jo', '123-45-6789'])
+          conn.exec_params('SELECT ssn FROM users WHERE name = $1', ['Jo']).each { |row| row['ssn'] }
+
+          # mysql2
+          client.prepare('INSERT INTO users (name, ssn) VALUES (?, ?)').execute('Jo', '123-45-6789')
+          ```
+
+          A column can also be named explicitly with an annotation, which takes
+          precedence over anything the parser found:
+
+          ```ruby
+          conn.exec_params('INSERT INTO users (name, ssn) VALUES ($1, /*@encrypt:users.ssn*/ $2)', ...)
+          ```
+
+          Encryption is randomized (a fresh IV per value), so an equality search
+          against an encrypted column never matches — filter, look up, and enforce
+          uniqueness on a column that is not encrypted instead.
+
+          :::caution
+          **On MySQL with ActiveRecord, set `prepared_statements: true` on the
+          connection.** The `aws_mysql2` adapter defaults prepared statements off, and
+          with them off ActiveRecord writes values into the SQL text as literals,
+          which the plugin cannot encrypt (a write to an encrypted column is refused
+          with `Errors::MetadataError`). The `aws_postgresql` adapter already defaults
+          prepared statements on. Weigh the trade-off before enabling them
+          fleet-wide, because server-side prepared statements interact poorly with
+          connection poolers and count against MySQL's `max_prepared_stmt_count`.
+          :::
+        - |
+          ## Enforce encryption in the database
+
+          A database-side HMAC-validation trigger is required on every encrypted
+          column. The trigger needs no help from the application, because the HMAC key
+          that signs each value is stored unencrypted in `key_storage`: the server can
+          verify that a value carries a valid integrity tag without holding the data
+          key.
+
+          ### PostgreSQL
+
+          ```sql
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+          -- Replace 'encrypt' below if encryption_metadata_schema is set to something else.
+          CREATE OR REPLACE FUNCTION enforce_encrypted_column() RETURNS trigger AS $$
+          DECLARE
+            col_name  text := TG_ARGV[0];
+            col_value bytea;
+            hmac_key  bytea;
+            cache_key text := 'hmac_key.' || TG_TABLE_NAME || '.' || col_name;
+          BEGIN
+            EXECUTE format('SELECT ($1).%I', col_name) INTO col_value USING NEW;
+            IF col_value IS NULL THEN
+              RETURN NEW;
+            END IF;
+
+            BEGIN
+              hmac_key := decode(current_setting(cache_key), 'hex');
+            EXCEPTION WHEN OTHERS THEN
+              SELECT ks.hmac_key INTO hmac_key
+                FROM encrypt.encryption_metadata em
+                JOIN encrypt.key_storage ks ON em.key_id = ks.id
+               WHERE em.table_name = TG_TABLE_NAME AND em.column_name = col_name;
+
+              IF hmac_key IS NULL THEN
+                RAISE EXCEPTION 'No HMAC key is configured for %.%', TG_TABLE_NAME, col_name;
+              END IF;
+
+              PERFORM set_config(cache_key, encode(hmac_key, 'hex'), true);
+            END;
+
+            IF length(col_value) < 65
+               OR substring(col_value from 1 for 32) <> hmac(substring(col_value from 33), hmac_key, 'sha256') THEN
+              RAISE EXCEPTION 'Column %.% does not carry a valid HMAC tag (plaintext or tampered value)', TG_TABLE_NAME, col_name;
+            END IF;
+
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+
+          -- Create the trigger for every column that you want to encrypt.
+          CREATE TRIGGER users_ssn_encrypted
+          BEFORE INSERT OR UPDATE ON users
+          FOR EACH ROW EXECUTE FUNCTION enforce_encrypted_column('ssn');
+
+          -- Create the trigger for another column.
+          CREATE TRIGGER users_dob_encrypted
+          BEFORE INSERT OR UPDATE ON users
+          FOR EACH ROW EXECUTE FUNCTION enforce_encrypted_column('dob');
+          ```
+
+          ### MySQL
+
+          MySQL has no built-in HMAC function, so the equivalent builds HMAC-SHA256 out
+          of `SHA2()`. Create the two functions and the validation procedure once per
+          schema, then add a `BEFORE INSERT` and a `BEFORE UPDATE` trigger per encrypted
+          column. Replace `SCHEMA_NAME` with the value of `encryption_metadata_schema`
+          (`encrypt` by default). Requires MySQL 5.7+ / MariaDB 10.2+ for `SHA2()`. On
+          Aurora/RDS MySQL, creating the functions may require the cluster parameter
+          `log_bin_trust_function_creators` to be set to `1`.
+
+          ```sql
+          DELIMITER $$
+
+          -- HMAC-SHA256 built from SHA2(), which MySQL has no native HMAC for.
+          DROP FUNCTION IF EXISTS hmac_sha256$$
+          CREATE FUNCTION hmac_sha256(
+              message VARBINARY(65535),
+              key_data VARBINARY(64)
+          )
+          RETURNS VARBINARY(32)
+          DETERMINISTIC
+          NO SQL
+          BEGIN
+              DECLARE block_size INT DEFAULT 64;  -- SHA-256 block size
+              DECLARE key_padded VARBINARY(64);
+              DECLARE ipad VARBINARY(64);
+              DECLARE opad VARBINARY(64);
+              DECLARE i INT DEFAULT 1;
+              DECLARE key_byte INT;
+
+              -- Reduce an over-long key to its hash, then zero-pad the key to the block size.
+              IF LENGTH(key_data) > block_size THEN
+                  SET key_padded = CONCAT(UNHEX(SHA2(key_data, 256)), REPEAT(X'00', block_size - 32));
+              ELSE
+                  SET key_padded = CONCAT(key_data, REPEAT(X'00', block_size - LENGTH(key_data)));
+              END IF;
+
+              -- ipad = key XOR 0x36 per byte, opad = key XOR 0x5C per byte, one raw byte at a time.
+              SET ipad = X'';
+              SET opad = X'';
+              WHILE i <= block_size DO
+                  SET key_byte = ASCII(SUBSTRING(key_padded, i, 1));
+                  SET ipad = CONCAT(ipad, UNHEX(LPAD(HEX(key_byte ^ 0x36), 2, '0')));
+                  SET opad = CONCAT(opad, UNHEX(LPAD(HEX(key_byte ^ 0x5C), 2, '0')));
+                  SET i = i + 1;
+              END WHILE;
+
+              RETURN UNHEX(SHA2(CONCAT(opad, UNHEX(SHA2(CONCAT(ipad, message), 256))), 256));
+          END$$
+
+          -- Verifies that a stored value carries a valid HMAC for the given HMAC key.
+          DROP FUNCTION IF EXISTS verify_encrypted_data_hmac$$
+          CREATE FUNCTION verify_encrypted_data_hmac(
+              data VARBINARY(65535),
+              hmac_key VARBINARY(32)
+          )
+          RETURNS BOOLEAN
+          DETERMINISTIC
+          NO SQL
+          BEGIN
+              -- Minimum payload: 32 (HMAC) + 4 (key id) + 1 (type) + 12 (IV) + 0 (ciphertext) + 16 (GCM tag) = 65.
+              IF data IS NULL OR LENGTH(data) < 65 THEN
+                  RETURN FALSE;
+              END IF;
+
+              RETURN SUBSTRING(data, 1, 32) = hmac_sha256(SUBSTRING(data, 33), hmac_key);
+          END$$
+
+          -- Called from a BEFORE INSERT / BEFORE UPDATE trigger to reject a value that is
+          -- not a valid kms_encryption payload. Replace SCHEMA_NAME with encryption_metadata_schema.
+          DROP PROCEDURE IF EXISTS validate_encrypted_data_hmac_before_insert$$
+          CREATE PROCEDURE validate_encrypted_data_hmac_before_insert(
+              IN p_table_name VARCHAR(64),
+              IN p_column_name VARCHAR(64),
+              IN column_value VARBINARY(65535)
+          )
+          BEGIN
+              DECLARE v_hmac_key VARBINARY(32);
+
+              IF column_value IS NOT NULL THEN
+                  SELECT ks.hmac_key INTO v_hmac_key
+                  FROM SCHEMA_NAME.encryption_metadata em
+                  JOIN SCHEMA_NAME.key_storage ks ON em.key_id = ks.id
+                  WHERE em.table_name = p_table_name
+                    AND em.column_name = p_column_name
+                  LIMIT 1;
+
+                  IF v_hmac_key IS NULL THEN
+                      SIGNAL SQLSTATE '45000'
+                      SET MESSAGE_TEXT = 'No HMAC key is configured for the encrypted column';
+                  END IF;
+
+                  IF NOT verify_encrypted_data_hmac(column_value, v_hmac_key) THEN
+                      SIGNAL SQLSTATE '45000'
+                      SET MESSAGE_TEXT = 'Column does not carry a valid HMAC tag (plaintext or tampered value)';
+                  END IF;
+              END IF;
+          END$$
+
+          DELIMITER ;
+          ```
+
+          Then create a pair of triggers for every column that you want to encrypt. For
+          example, on `users.ssn`:
+
+          ```sql
+          DELIMITER $$
+          -- Create both triggers for every column that you want to encrypt.
+          CREATE TRIGGER users_ssn_hmac_check
+          BEFORE INSERT ON users
+          FOR EACH ROW
+          BEGIN
+              CALL validate_encrypted_data_hmac_before_insert('users', 'ssn', NEW.ssn);
+          END$$
+
+          CREATE TRIGGER users_ssn_hmac_check_update
+          BEFORE UPDATE ON users
+          FOR EACH ROW
+          BEGIN
+              CALL validate_encrypted_data_hmac_before_insert('users', 'ssn', NEW.ssn);
+          END$$
+
+          -- Repeat the pair for another column, e.g. users.dob.
+          CREATE TRIGGER users_dob_hmac_check
+          BEFORE INSERT ON users
+          FOR EACH ROW
+          BEGIN
+              CALL validate_encrypted_data_hmac_before_insert('users', 'dob', NEW.dob);
+          END$$
+
+          CREATE TRIGGER users_dob_hmac_check_update
+          BEFORE UPDATE ON users
+          FOR EACH ROW
+          BEGIN
+              CALL validate_encrypted_data_hmac_before_insert('users', 'dob', NEW.dob);
+          END$$
+          DELIMITER ;
+          ```
+        - |
+          ## Hardening the deployment
+
+          Two access-control boundaries keep the encryption meaningful:
+
+          - **Restrict the KMS keys the application can use.** At runtime the plugin
+            only decrypts stored data keys, so grant the application's role just
+            `kms:Decrypt` on the specific master key ARN(s) — never `Resource: "*"`.
+            Run the administrative side (`KeyManagementUtility`) under a separate
+            admin-only credential.
+          - **Restrict write access to the metadata schema.** Anyone who can write
+            `encryption_metadata` or `key_storage` can defeat the protection. Grant
+            the application's role `SELECT` and reserve `INSERT`/`UPDATE`/`DELETE` for
+            the administrative role:
+
+          ```sql
+          -- PostgreSQL
+          GRANT USAGE ON SCHEMA encrypt TO app_role;
+          GRANT SELECT ON ALL TABLES IN SCHEMA encrypt TO app_role;
+          REVOKE INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA encrypt FROM app_role;
+          ```
+
+  # =========================================================================
+  # Custom Endpoint Plugin
+  # =========================================================================
+  custom-endpoint:
+    availableWrappers: [ruby]
+    intro: |
+      The Custom Endpoint Plugin adds support for
+      [Aurora custom endpoints](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Endpoints.Custom.html).
+      When the plugin is in use, the wrapper analyzes the custom endpoint's member
+      list to ensure the instances used for connections are part of the custom
+      endpoint being used, including connections used during failover. Use this
+      plugin when your connection host is an Aurora cluster custom endpoint:
+      `<custom-endpoint-name>.cluster-custom-<XYZ>.<region>.rds.amazonaws.com`.
+    note: |
+      An Aurora custom endpoint is a cluster endpoint with a user-defined member
+      list, managed in RDS. It is **not** the same as a user custom domain (a CNAME
+      alias pointing at an RDS endpoint), which is configured with the instance host
+      pattern parameter instead.
+    code:
+      ruby: custom_endpoint
+    availableSince:
+      ruby: "1.0.0"
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-endpoint.cluster-custom-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "custom_endpoint"
+        )
+    parameters:
+      - concept: region
+        type: string
+        description: "The region of the cluster's custom endpoints. Parsed from the URL when not specified, and required for endpoints that carry no region — IP addresses and custom CNAMEs/domains — because the region cannot be parsed from them."
+        spellings:
+          ruby: { name: custom_endpoint_region, required: "Required for IP addresses and custom CNAMEs; otherwise No", defaultNote: "parsed from URL", example: "us-east-1" }
+      - concept: refreshRate
+        type: integer
+        description: "How frequently custom endpoint monitors fetch custom endpoint info."
+        spellings:
+          ruby: { name: custom_endpoint_info_refresh_rate_sec, type: float, required: "No", default: "30.0", unit: s, example: "20.0" }
+      - concept: backoffFactor
+        type: integer
+        description: "Exponential backoff factor for the custom endpoint monitor when it encounters an RDS throttling exception. The refresh interval increases by this factor on throttling and decreases by it on success."
+        spellings:
+          ruby: { name: custom_endpoint_info_refresh_rate_backoff_factor, required: "No", default: "2", example: "5" }
+      - concept: maxRefreshRate
+        type: integer
+        description: "Maximum time the custom endpoint monitor waits between fetches for custom endpoint info."
+        spellings:
+          ruby: { name: custom_endpoint_info_max_refresh_rate_sec, type: float, required: "No", default: "300.0", unit: s, example: "600.0" }
+      - concept: monitorExpiration
+        type: integer
+        description: "How long a monitor runs without use before expiring and being removed."
+        spellings:
+          ruby: { name: custom_endpoint_monitor_expiration_sec, type: float, required: "No", default: "900.0", unit: s, example: "600.0" }
+      - concept: waitForInfo
+        type: boolean
+        description: "Whether to wait for custom endpoint info to become available before connecting or executing a method. Disabling this may result in occasional connections to instances outside of the custom endpoint."
+        spellings:
+          ruby: { name: wait_for_custom_endpoint_info, required: "No", default: "true", example: "true" }
+      - concept: waitTimeout
+        type: integer
+        description: "Maximum time the plugin waits for custom endpoint info to be made available by the monitor."
+        spellings:
+          ruby: { name: wait_for_custom_endpoint_info_timeout_sec, type: float, required: "No", default: "5.0", unit: s, example: "7.0" }
+
+  # =========================================================================
+  # Global Database (GDB) Failover Plugin
+  # =========================================================================
+  gdb-failover:
+    availableWrappers: [ruby]
+    intro: |
+      In an [Amazon Aurora Global Database](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database.html),
+      the primary DB cluster in one AWS region is replicated to secondary clusters in
+      other regions. The Global Database (GDB) Failover Plugin extends failover with
+      awareness of these regions so it can reconnect with minimal downtime when the
+      primary region changes.
+
+      The plugin introduces the notion of a **home region** and lets you configure
+      different failover logic for the **in-home** case (the Global Database primary
+      region is the home region) and the **out-of-home** case (the primary region is
+      not the home region). For example, an application can follow the writer while
+      the primary is local but connect to a nearby reader once the primary moves to
+      another region.
+    code:
+      ruby: gdb_failover
+    pluginGroup: failover
+    availableSince:
+      ruby: "1.0.0"
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-global-db.global-xyz.global.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "gdb_failover",
+          wrapper_dialect: "global-aurora-pg",
+          failover_home_region: "us-west-1",
+          global_cluster_instance_host_patterns: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com"
+        )
+    parameters:
+      - concept: homeRegion
+        type: string
+        description: "The AWS region the application runs in. Determines which of the in-home and out-of-home modes applies. Defaults to the region parsed from the connection endpoint, and is required when the endpoint carries no region (a Global Database endpoint, an IP address, or a custom domain)."
+        spellings:
+          ruby: { name: failover_home_region, required: "Yes for endpoints with no region; otherwise No", defaultNote: "parsed from URL", example: "us-west-1" }
+      - concept: inHomeMode
+        type: string
+        description:
+          ruby: "Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`. When unset, the mode is derived from the initial connection endpoint: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`."
+        spellings:
+          ruby: { name: in_home_failover_mode,  required: "No", defaultNote: "depends on URL", example: "strict_writer" }
+      - concept: outHomeMode
+        type: string
+        description:
+          ruby: "Failover mode used while the Global Database primary region **is not** the home region. Accepts the same values as the in-home mode. When unset, it is derived from the initial endpoint the same way as the in-home mode: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`."
+        spellings:
+          ruby: { name: out_of_home_failover_mode, required: "No", defaultNote: "depends on URL", example: "strict_any_reader" }
+      - concept: globalHostPatterns
+        type: string
+        description: "Comma-separated instance host patterns for every Global Database region. Prefix custom-domain patterns with `[region]`. Required for Aurora Global Databases; ignored otherwise."
+        spellings:
+          ruby: { name: global_cluster_instance_host_patterns, required: "Yes for Global Databases; otherwise No", defaultNote: "none", example: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com" }
+      - concept: accessibleRegions
+        type: string
+        description: "Comma-separated list of AWS regions the application can reach. When set, failover and topology monitoring only consider nodes in these regions. If the home region is also set, it must be included."
+        spellings:
+          ruby: { name: accessible_regions,   required: "No", defaultNote: "all regions", example: "us-east-1,us-west-1" }
+      - concept: failoverTimeout
+        type: integer
+        description: "Maximum allowed time to attempt reconnecting to a new writer or reader instance after a cluster failover is initiated."
+        spellings:
+          ruby: { name: failover_timeout_sec, type: float, required: "No", default: "300.0",    unit: s,  example: "300.0" }
+      - concept: topologyRefreshRate
+        type: integer
+        description: "Cluster topology refresh rate while the cluster is not in failover (the regular slow monitoring rate)."
+        spellings:
+          ruby: { name: cluster_topology_refresh_rate_sec, type: float, required: "No", default: "5.0", unit: s, example: "5.0" }
+      - concept: readerStrategy
+        type: string
+        description: "Strategy used to select a reader node during failover. See [host selection strategies](../host-selection-strategies) for the available values."
+        spellings:
+          ruby: { name: failover_reader_host_selector_strategy, required: "No", default: "random", example: "random" }
+    configExamples:
+      # Ported from the two most instructive scenarios: a writer connection
+      # and a home-region reader. Together they cover both host roles and the two
+      # failover modes a reader/writer choice implies. Property names and mode
+      # values are the Ruby spellings — Ruby accepts kebab-case too, but its own
+      # property documentation lists snake_case, so that is what is shown.
+      ruby:
+        - title: "Writer connection with in-region failover"
+          goal: "An application deployed in `us-west-1` needs a writer connection to a global database spanning `us-east-1`, `us-west-1`, and `us-east-2`."
+          settings:
+            - "`failover_home_region: us-west-1` — required here, because a global endpoint carries no region for the wrapper to parse"
+            - "`in_home_failover_mode: strict_writer` and `out_of_home_failover_mode: strict_writer` — always reconnect to the writer, wherever the primary region currently is"
+            - "`global_cluster_instance_host_patterns` — one pattern per region, so the wrapper can reach individual instances"
+            - "`wrapper_dialect: global-aurora-pg` (or `global-aurora-mysql`)"
+            - "`wrapper_plugins: initial_connection,gdb_failover`"
+            - "point `host` at the global database endpoint"
+          lang: yaml
+          code: |
+            # config/database.yml
+            production:
+              adapter: aws_postgresql
+              host: my-global-db.global-xyz.global.rds.amazonaws.com
+              database: mydb
+              username: <username>
+              password: <password>
+              wrapper_plugins: initial_connection,gdb_failover
+              wrapper_dialect: global-aurora-pg
+              failover_home_region: us-west-1
+              in_home_failover_mode: strict_writer
+              out_of_home_failover_mode: strict_writer
+              global_cluster_instance_host_patterns: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com,?.xyz3.us-east-2.rds.amazonaws.com"
+          note: >-
+            Both modes are `strict_writer`, so a switchover to another region still
+            leaves this connection on a writer. Writes then cross regions, which
+            costs latency — that is the trade this configuration makes to keep
+            writes working.
+
+        - title: "Prefer a home-region reader on cross-region failover"
+          goal: "A reporting connection in `us-west-1` should read locally, and should keep preferring `us-west-1` readers even after the primary region switches over."
+          settings:
+            - "`failover_home_region: us-west-1` — optional here, since a regional reader endpoint already carries the region, but stating it keeps the intent explicit"
+            - "`in_home_failover_mode: strict_home_reader` and `out_of_home_failover_mode: strict_home_reader` — stay on a reader in the home region either way"
+            - "`global_cluster_instance_host_patterns` and `wrapper_dialect` — same as above"
+            - "`wrapper_plugins: initial_connection,gdb_failover`"
+            - "point `host` at the cluster reader endpoint in `us-west-1`"
+          lang: yaml
+          code: |
+            # config/database.yml
+            production:
+              adapter: aws_postgresql
+              host: my-cluster.cluster-ro-xyz2.us-west-1.rds.amazonaws.com
+              database: mydb
+              username: <username>
+              password: <password>
+              wrapper_plugins: initial_connection,gdb_failover
+              wrapper_dialect: global-aurora-pg
+              failover_home_region: us-west-1
+              in_home_failover_mode: strict_home_reader
+              out_of_home_failover_mode: strict_home_reader
+              global_cluster_instance_host_patterns: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com,?.xyz3.us-east-2.rds.amazonaws.com"
+          note: >-
+            This is the entry to use as the `reading` role when you pair it with a
+            writer through `connects_to`. Reads never leave `us-west-1`, so this
+            connection cannot write — pair it with a writer configuration for
+            anything that does.
+
+  # =========================================================================
+  # Aurora Initial Connection Strategy Plugin
+  # =========================================================================
+  initial-connection-strategy:
+    availableWrappers: [ruby]
+    intro: |
+      The Initial Connection Strategy Plugin controls how the initial connection to a
+      cluster is established and verified, and it obtains a connection more reliably
+      while DNS is updating. When the initial connection is to a reader or custom
+      cluster endpoint, the connected host is chosen according to the configured
+      [host selection strategy](../host-selection-strategies).
+
+      When you connect to a cluster endpoint, the instance for a new connection is
+      resolved by DNS. During failover the cluster elects another instance to be the
+      writer, and while DNS is updating — which can take up to 40–60 seconds — a
+      connection to the cluster endpoint may land on an old node. This plugin helps
+      by replacing the outdated endpoint while DNS is updating. It also recognizes an
+      Aurora Global Writer Endpoint and substitutes it with the current writer
+      endpoint.
+
+      This plugin is part of the default plugin list as of v1.0.0: it resolves a cluster
+      endpoint to a specific instance and distributes new connections across the
+      cluster's instances. It does not apply to deployments it is incompatible with
+      (for example an Aurora custom endpoint) or where there is no cluster endpoint
+      to resolve (for example behind an RDS Proxy), and should be left out there.
+    code:
+      ruby: initial_connection
+    availableSince:
+      ruby: "1.0.0 (default plugin)"
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-ro-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "initial_connection"
+        )
+    parameters:
+      - concept: substitutionRole
+        type: string
+        description: "Whether the initial connection URL should be replaced with an instance URL from the topology when available, and the role of the instance to select. For writer or global writer endpoints, valid values are `writer` and `none`; for reader endpoints, `reader` and `none`; for custom cluster endpoints with the custom endpoint plugin enabled, `any`, `reader`, or `none`. `none` disables substitution. When unset, the default is derived from the endpoint type: a writer or global writer cluster endpoint substitutes a `writer`, a reader cluster endpoint substitutes a `reader`, and any other endpoint (instance, custom, or non-RDS) performs no substitution."
+        spellings:
+          ruby: { name: initial_connection_substitute_host, required: "No", defaultNote: "depends on endpoint type", example: "reader" }
+      - concept: verifyRole
+        type: string
+        description: "Whether an opened connection should be verified to be a writer or reader after connecting, or if no role verification should be performed. `none` disables verification. When unset, the default is derived from the endpoint type: a writer or global writer cluster endpoint verifies `writer`, a reader cluster endpoint verifies `reader`, and any other endpoint performs no verification."
+        spellings:
+          ruby: { name: initial_connection_verify_role, required: "No", defaultNote: "depends on endpoint type", example: "reader" }
+      - concept: hostStrategy
+        type: string
+        description: "Strategy used to select a host when opening a new connection, applied after the substitution role narrows the candidates. See [host selection strategies](../host-selection-strategies) for the available values."
+        spellings:
+          ruby: { name: initial_connection_host_selector_strategy, required: "No", default: "random", example: "random" }
+      - concept: retryTimeout
+        type: integer
+        description: "Maximum allowed time for retries when opening a connection."
+        spellings:
+          ruby: { name: initial_connection_retry_timeout_sec, type: float, required: "No", default: "30.0", unit: s, example: "40.0" }
+      - concept: retryInterval
+        type: integer
+        description: "The time between retries when opening a connection."
+        spellings:
+          ruby: { name: initial_connection_retry_interval_sec, type: float, required: "No", default: "1.0", unit: s, example: "2.0" }
+      - concept: waitForTopology
+        type: long
+        description: "Maximum allowed time to wait for the cluster topology to be fetched before opening a new connection. When greater than `0` and topology is not yet available, the plugin blocks until topology is discovered (or the timeout is reached) rather than falling back to the cluster endpoint. This helps host selection strategies distribute concurrent and pool-prefill connections across instances. A value of `0` means the plugin will not wait for topology information if it is not yet available and may occasionally use the cluster endpoint in these scenarios."
+        spellings:
+          ruby: { name: initial_connection_wait_for_topology_sec, type: float, required: "No", default: "0.0", unit: s, example: "30.0" }
+      - concept: inactiveSubstitutionRole
+        type: string
+        description: "Whether an inactive cluster writer endpoint in the initial connection URL should be replaced with a writer instance URL from the topology when available. Applicable to Aurora Global Databases. Valid values are `writer` and `none`."
+        spellings:
+          ruby: { name: initial_connection_inactive_substitute_host,   required: "No", defaultNote: "passthrough", example: "writer" }
+      - concept: inactiveVerifyRole
+        type: string
+        description: "Whether a connection opened with an inactive cluster writer endpoint should be verified to be a writer. Applicable to Aurora Global Databases. Valid values are `writer` and `none`."
+        spellings:
+          ruby: { name: initial_connection_inactive_verify_role,           required: "No", defaultNote: "none", example: "writer" }
+      - concept: accessibleRegions
+        type: string
+        availability: { ruby: true }
+        description: "Comma-separated list of AWS regions the application can reach. When set and a Global Aurora dialect is in use, candidate hosts in regions not listed are excluded before host selection."
+        spellings:
+          ruby: { name: accessible_regions,   required: "No", defaultNote: "all regions", example: "us-east-1,us-west-1" }
+
+  # =========================================================================
+  # Blue/Green Deployment Plugin
+  # =========================================================================
+  blue-green:
+    availableWrappers: [ruby]
+    intro: |
+      The [Blue/Green Deployment](https://docs.aws.amazon.com/whitepapers/latest/blue-green-deployments/introduction.html)
+      technique releases changes by shifting traffic between two identical
+      environments running different versions, reducing downtime and rollback risk.
+      During an
+      [RDS/Aurora Blue/Green switchover](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/blue-green-deployments-switching.html),
+      connections to blue nodes terminate, endpoints are redirected, internal node
+      names change, and certificates are regenerated — all of which can disrupt an
+      application.
+
+      The Blue/Green Deployment Plugin minimizes that disruption by actively monitoring
+      switchover status and adjusting connection handling at each phase:
+
+      - **Before the switchover**, it inventories the blue and green endpoints and their IP addresses.
+      - **During the active switchover**, it temporarily suspends calls to blue nodes and substitutes hostnames with the corresponding IP addresses to avoid stale DNS.
+      - **After the switchover**, it monitors DNS until blue endpoints are reconfigured, then stops substituting.
+      - **Once switchover completes**, it rejects new connections to green nodes.
+      - **If the switchover fails or rolls back**, it detects that and restores normal handling.
+    code:
+      ruby: bg
+    availableSince:
+      ruby: "1.0.0"
+    supported: |
+      **Currently supported deployments:**
+      - Aurora MySQL and PostgreSQL clusters
+      - RDS MySQL and PostgreSQL instances
+
+      **Unsupported deployments and configurations:**
+      - RDS MySQL and PostgreSQL Multi-AZ clusters
+      - Aurora Global Database for MySQL and PostgreSQL
+      - Connecting to database nodes using CNAME aliases
+
+      Full Blue/Green support also requires a minimum database engine version that includes
+      a specific metadata table (and, on RDS PostgreSQL, the `rds_tools` extension). If the
+      version does not include it, the plugin detects its absence and falls back to its
+      previous behavior — no action required. See
+      [Known limitation](#known-limitation) below for the minimum versions and setup.
+    enableSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "bg"
+        )
+    parameters:
+      - concept: bgdId
+        type: string
+        description: "Identifier that distinguishes different Blue/Green Deployments. Required when supporting multiple deployments: all connection strings for the same deployment must share the same value, and different deployments must use distinct values."
+        spellings:
+          ruby: { name: bgd_id, required: "Yes for multiple deployments; otherwise No", default: "1", example: "abc-1" }
+      - concept: connectTimeout
+        type: integer
+        description: "Maximum waiting time for establishing new connections during a switchover while blue and green traffic is temporarily suspended."
+        spellings:
+          ruby: { name: bg_connect_timeout_sec, type: float, required: "No", default: "30.0", unit: s, example: "30.0" }
+      - concept: baseline
+        type: integer
+        description:
+          ruby: "Baseline interval for checking Blue/Green Deployment status. Keep this below 900 sec (15 minutes)."
+        spellings:
+          ruby: { name: bg_baseline_sec, type: float, required: "No", default: "60.0", unit: s, example: "60.0" }
+      - concept: increased
+        type: integer
+        description:
+          ruby: "Increased interval for checking Blue/Green Deployment status. Configure within 0.5–2 sec."
+        spellings:
+          ruby: { name: bg_increased_sec, type: float, required: "No", default: "1.0", unit: s, example: "1.0" }
+      - concept: high
+        type: integer
+        description:
+          ruby: "High-frequency interval for checking Blue/Green Deployment status. Configure within 0.05–0.5 sec."
+        spellings:
+          ruby: { name: bg_high_sec, type: float, required: "No", default: "0.1", unit: s, example: "0.1" }
+      - concept: switchoverTimeout
+        type: integer
+        description: "Maximum duration allowed for switchover completion. If the process stalls or exceeds this, the wrapper assumes completion and resumes normal operations."
+        spellings:
+          ruby: { name: bg_switchover_timeout_sec, type: float, required: "No", default: "180.0", unit: s, example: "180.0" }
+    monitoringPrefix:
+      ruby: "bg_monitoring_"
+    monitoringSnippet:
+      ruby: |
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          dbname: "mydb",
+          wrapper_plugins: "bg",
+          bg_monitoring_connect_timeout: 10,
+          bg_monitoring_socket_timeout: 10
+        )
+    prereqCount:
+      ruby: 0
+    wrapperOnly:
+      ruby:
+        - |
+          ## Known limitation
+
+          Full Blue/Green support requires a minimum database engine version that includes
+          a specific metadata table. When the green deployment meets the minimum version,
+          the metadata is available and the plugin uses its enhanced handling; otherwise
+          the plugin automatically detects the table's absence and falls back to its
+          previous behavior, subject to the limitations listed above. No action is required
+          for that fallback. This version constraint does **not** apply to RDS MySQL.
+
+          For RDS PostgreSQL you must also install the `rds_tools` extension so the
+          metadata is exposed:
+
+          ```sql
+          CREATE EXTENSION rds_tools;
+          ```
+
+          Minimum engine versions that include the metadata table:
+
+          | Engine              | Minimum version                                                            |
+          |---------------------|----------------------------------------------------------------------------|
+          | Aurora PostgreSQL   | Engine release `17.5`, `16.9`, `15.13`, `14.18`, `13.21`, or above         |
+          | Aurora MySQL        | Engine release `3.07` or above                                             |
+          | RDS PostgreSQL      | `rds_tools v1.7` (`17.1`, `16.5`, `15.9`, `14.14`, `13.17`, `12.21`) or above |
+          | RDS MySQL           | No metadata-table version requirement                                      |
+
+          Aurora PostgreSQL clusters running engine release `17.7, 16.11, 15.15, 14.20,
+          13.23` or above experience shorter switchover downtime than earlier versions
+          (following the source/blue cluster's engine version).

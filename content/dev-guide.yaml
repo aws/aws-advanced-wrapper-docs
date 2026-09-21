@@ -1,0 +1,438 @@
+# Content registry for the Development Guide conceptual pages.
+#
+# ============================================================================
+# RULE — EACH WRAPPER'S DOCS MUST READ AS STANDALONE (NO CROSS-WRAPPER REFS)
+# ============================================================================
+# The site is built on a multi-wrapper architecture but currently ships a
+# single wrapper (Ruby). Content that renders into a wrapper's doc tree MUST
+# NOT mention, name, compare to, or imply the existence of any OTHER wrapper
+# that may be added later.
+#
+#   - In RENDERED content (templates + any registry value that ends up on a
+#     page): never write "the wrappers", "across wrappers", "the other
+#     wrapper", "unlike <other>", "the <other> equivalent", etc., and never
+#     borrow another wrapper's vocabulary. Describe only the CURRENT wrapper.
+#   - Use `{{ dg.productName }}` / `{{ wrapper.wrapperName }}` for the name and
+#     the wrapper's own terms.
+#   - A wrapper naming ITSELF is fine.
+#   - Maintainer COMMENTS in these YAML/registry files and Jinja `{# #}`
+#     comments are NOT rendered, so they explain the single-sourcing mechanism.
+#   - When adding a new wrapper, add its values under `wrappers.<id>` and write
+#     each wrapper's value as if the others did not exist.
+# ============================================================================
+#
+# Single source for the near-duplicate dev-guide docs (Architecture, Service
+# Container, Pipelines, Loadable Plugins, Development Guide, Integration Tests).
+# Shared prose lives in content/templates/*.md.j2; everything that differs per
+# wrapper is a value here. Wrapper-only sections (rendered verbatim, full
+# Markdown) are appended at the bottom of the relevant page.
+#
+# NOTE ON THE SERVICE CONTAINER: the wrapper organizes its internal
+# capabilities as a *service container* — a bundle of discrete services that
+# plugins reach into. The "Service Container" page (template: service-container)
+# iterates a per-wrapper `services` list defined under `wrappers.<id>.services`.
+# The overarching ideas (a plugin manager drives pipelines; a connection
+# service tracks the current connection and host list; a storage service caches
+# shared data; a monitor service runs background monitors; an event publisher
+# fans out events) are expressed with each wrapper's own class names and method
+# calls. Ruby exposes a ServiceContainer struct of connection_service,
+# dialect_service, event_publisher, host_service, plugin_manager,
+# session_state_service, storage_service, and monitor_service; plugins reach
+# each service directly off the container.
+#
+# NOTE ON DIAGRAMS: the Architecture, Service Container, and Pipelines pages
+# render single-sourced **Mermaid** diagrams (```mermaid fenced blocks). The
+# shared diagram structure lives in the templates; the wrapper-specific labels
+# come from this registry — per-service `short`/`global` flags and the
+# per-wrapper `diagram:` block (entry points, sample plugins, pipeline labels).
+
+wrappers:
+  ruby:
+    productName: "AWS Advanced Ruby Driver Wrapper"
+    componentCount: 5
+    methodTerm: "Ruby method calls"
+    methodTermSingular: "Ruby method call"
+    # Example non-query methods that still flow through the execute pipeline, rendered
+    # inline in the Pipelines page. Each wrapper supplies its own driver-specific methods.
+    utilityMethodExamples: "`ping` or `escape`"
+    connectionObject: "wrapper connection"
+    connectionShort: "connection"
+    pluginConfigParam: "`wrapper_plugins` connection parameter"
+    pluginManagerTitle: "Plugin Manager"
+    pluginManagerShort: "plugin manager"
+    staticHostListProvider: "ConnectionStringHostListProvider"   # static provider name
+    hostListProvider: "RdsHostListProvider"                       # dynamic (topology-aware) provider name
+    globalHostListProvider: "GlobalAuroraHostListProvider"        # Global Database variant of the dynamic provider
+    topologyMonitor: "ClusterTopologyMonitor"                     # background topology monitor name
+    dialectsLink: "./service-container"
+    staticDialectCodes: ["pg", "mysql", "rds-pg", "rds-mysql"]
+    dialectHostListProviders:
+      - label: "Aurora clusters"
+        codes: ["aurora-pg", "aurora-mysql"]
+      - label: "Aurora Global Databases"
+        codes: ["global-aurora-pg", "global-aurora-mysql"]
+      - label: "RDS Multi-AZ DB clusters"
+        codes: ["multi-az-pg-cluster", "multi-az-mysql-cluster"]
+
+    # Ruby diagram labels come from the `diagram:` block below.
+    architectureComponents: |
+      1. The connection entry points (`WrapperPgConnection`, `WrapperMysql2Client`, and the `aws_postgresql` / `aws_mysql2` ActiveRecord adapters)
+      2. The [plugin manager](./service-container#plugin-manager) (one of the services in the container)
+      3. The [loadable and extensible plugins](./loadable-plugins)
+      4. The [service container](./service-container) of discrete services
+      5. The host list providers
+
+      The connection entry points ensure all Ruby method calls are routed through the plugin manager.
+
+    hostListNotifyName: "notify_host_list_changed"
+    hostSpecByStrategyName: "select_host"
+    acceptsStrategyName: "accepts_strategy"
+
+    subscribedMethodsIntro: |
+      Each plugin defines a `subscribed_methods` attribute — a `Set` of method-name strings (or `Set['*']` for all methods). All plugins must define `subscribed_methods`.
+
+      When executing a Ruby method, the plugin manager only invokes a plugin whose `subscribed_methods` includes that method (or `'*'`). For example, the `FailoverPlugin` subscribes to `connect` plus the driver dialect's network-bound methods, so it is not triggered by non-network calls.
+    initHostProviderKey: "init_host_provider"
+    notifyConnChangedKey: "notify_connection_changed"
+
+    devPrereqs: "Make sure you have Ruby 3.3+ installed, along with your choice of underlying driver gem (`pg` or `mysql2`)."
+    buildTool: "Bundler + RSpec"
+    sampleCode: |
+      A minimal connection example using the wrapper:
+
+      ```ruby
+      require 'aws_advanced_ruby_driver_wrapper/postgresql'
+
+      conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+        host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+        dbname: "mydb",
+        user: "<username>",
+        password: "<password>",
+        wrapper_plugins: "failover"
+      )
+
+      conn.exec("SELECT 1")
+      ```
+
+      For more samples and the plugin guides, see the [`docs` directory](https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/docs) in the repository.
+
+    testResultsPath: "`coverage/index.html`"
+
+    # --- Integration Tests page registry -------------------------------------
+    showExistingClusterNote: false
+    itEnvVars: |
+      | Environment Variable Name | Required | Description                                                                                                | Example Value                                 |
+      |---------------------------|----------|------------------------------------------------------------------------------------------------------------|-----------------------------------------------|
+      | `DB_USERNAME`             | Yes      | The username to access the database.                                                                       | `admin`                                       |
+      | `DB_PASSWORD`             | Yes      | The database cluster password.                                                                             | `password`                                    |
+      | `DB_DATABASE_NAME`        | No       | Name of the database that will be used by the tests. The default database name is test.                    | `test_db_name`                                |
+      | `RDS_DB_NAME`             | Yes      | The database identifier for your Aurora or RDS cluster. Must be a unique value to avoid conflicts.          | `db-identifier`                               |
+      | `RDS_DB_DOMAIN`           | If running against an existing database, yes; otherwise, no.       | The existing database connection suffix. Use this variable to run against an existing database.            | `xyz.us-east-1.rds.amazonaws.com`             |
+      | `IAM_USER`                | No       | User within the database that is identified for AWS IAM Authentication.                                    | `example_user_name`                           |
+      | `AWS_ACCESS_KEY_ID`       | Yes      | An AWS access key associated with an IAM user or role with RDS permissions.                                | `ABCDEFGH12345EXAMPLE`                        |
+      | `AWS_SECRET_ACCESS_KEY`   | Yes      | The secret key associated with the provided AWS_ACCESS_KEY_ID.                                             | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`    |
+      | `AWS_SESSION_TOKEN`       | No       | AWS Session Token for CLI, SDK, & API access. This value is for MFA credentials only.                      | `AQoDYXdzEJr...<remainder of session token>`  |
+      | `REUSE_RDS_DB`            | Yes      | Set to true if you would like to use an existing cluster for your tests.                                   | `false`                                       |
+      | `RDS_DB_REGION`           | Yes      | The database region.                                                                                       | `us-east-1`                                   |
+      | `FILTER`                  | No       | Filter tests to a specific file or `file:line`. When unset, runs all tests in `spec/integration/container`.| `spec/integration/container/failover_spec.rb` |
+      | `DEBUG_ENV`               | No       | The debugging environment; values are `VSCODE` (default) or `TERMINAL`.                                    | `VSCODE`                                      |
+    itTasks: |
+      - `test-docker`: run all standard (local Docker database) tests
+      - `test-aurora`: run all Aurora tests
+      - `test-pg-aurora`: run the PostgreSQL Aurora tests
+      - `test-mysql-aurora`: run the MySQL Aurora tests
+      - `test-multi-az`: run the RDS Multi-AZ cluster tests
+      - `test-gdb-pg` / `test-gdb-mysql`: run the Global Database tests
+      - `debug-aurora`, `debug-docker`, `debug-pg-aurora`, `debug-mysql-aurora`, `debug-all-environments`: the corresponding debug tasks
+    itRunExample: |
+      For example, to run the Aurora integration tests:
+
+      ```bash
+      ./gradlew test-aurora
+      ```
+
+      You can configure which test environments a task runs against by editing/adding system property values on the task in `spec/integration/host/build.gradle.kts` (for example, add `systemProperty("exclude-mysql-engine", "true")` to skip MySQL Aurora tests).
+
+      To filter to a single spec file or line, set the `FILTER` environment variable:
+
+      ```bash
+      FILTER=spec/integration/container/failover_spec.rb ./gradlew test-aurora
+      ```
+
+    diagram:
+      entryPoints:
+        - "WrapperPgConnection / WrapperMysql2Client"
+        - "aws_postgresql / aws_mysql2 (ActiveRecord)"
+      wrapperNode: "Wrapper Connection"
+      samplePlugins:
+        - "Plugin A"
+        - "Plugin B"
+      terminusPlugin: "Default Plugin"
+      connectPipelineLabel: "connect"
+      executePipelineLabel: "execute"
+      hostListProviderOwner: "Host Service"
+
+    # --- Pipelines page registry ---------------------------------------------
+    extendedPipelines: false
+    pipelineList: |
+      - The connect pipeline.
+      - The internal_connect pipeline.
+      - The execute pipeline.
+    secondConnectHeading: "Internal Connect Pipeline"
+    secondConnectProse: |
+      The internal_connect pipeline opens a connection for the wrapper's own internal use — for example when a plugin needs a separate connection to a specific host during failover — rather than the connection handed back to your application. Plugins implement `internal_connect` when they need to control how these internal connections are established.
+    connectProviderProse: |
+      The connect pipeline is where a plugin runs setup around opening the connection your application uses.
+
+    # --- Service container (single-sourced "Service Container" page) ----------
+    containerName: "`ServiceContainer`"
+    containerIntro: |
+      The AWS Advanced Ruby Driver Wrapper uses a `ServiceContainer` — a `Struct`
+      holding discrete services — that is built once per wrapper connection. Every
+      plugin is constructed with `(service_container, props)` and reaches each
+      capability directly off the container, e.g. `service_container.host_service`
+      or `service_container.storage_service`.
+
+      The container holds these services: `connection_service`, `dialect_service`,
+      `host_service`, `session_state_service`, `plugin_manager`, `storage_service`,
+      `monitor_service`, and `event_publisher`.
+    containerAccessExample: |
+      ```ruby
+      # Inside a plugin constructed with (service_container, props):
+      conn     = service_container.connection_service.current_connection
+      hosts    = service_container.host_service.hosts
+      dialect  = service_container.dialect_service.db_dialect
+      topology = service_container.storage_service.get(:topology, cluster_id)
+      ```
+    # Extra notes rendered as a subsection inside the Plugin Manager section.
+    pluginManagerNotes: |
+      #### Plugin ordering
+
+      Plugins are ordered by a fixed weight (lower runs first / outermost). The
+      built-in weights are: Blue/Green `200`, Custom Endpoint `250`, Initial
+      Connection Strategy `300`, Failover `400`, GDB Failover `500`, IAM `1800`,
+      Secrets Manager `1900`. `load_plugins` reads the `wrapper_plugins` list,
+      sorts by weight, instantiates each with `(service_container, props)`, and
+      **always appends `DefaultPlugin` last** — it is the pipeline terminus that
+      actually opens the underlying driver connection.
+
+      :::note
+
+      The pipeline is built lazily per method and memoized. The subscribed
+      plugins are folded right-to-left into nested lambdas, so each plugin can run
+      code before and after `next_plugin.call`.
+
+      :::
+    # Rendered as the last paragraph of the Host List Providers section.
+    services:
+      - name: "Connection Service"
+        short: "Connection Service"
+        global: false
+        api: "`service_container.connection_service`"
+        summary: |
+          Tracks the current connection and its host, and switches the connection
+          during events like failover. It is the primary service for connection
+          state.
+        offers: |
+          - `current_connection` / `current_host_info` — the live connection and its host.
+          - `update_current_connection(connection, host_info)` — swap in a new connection.
+          - `config` — the parsed `ConnectionConfig`.
+        whenToUse: |
+          Use it whenever a plugin needs the live connection or the current host, or to
+          replace the connection after selecting a new host.
+      - name: "Host Service"
+        short: "Host Service"
+        global: false
+        api: "`service_container.host_service`"
+        summary: |
+          Owns the host list and the host list provider, and resolves host-selection
+          strategies. See [Host List Providers](#host-list-providers).
+        offers: |
+          - `hosts` / `all_hosts` — allowed and full host lists.
+          - `host_list_provider` — the active provider.
+          - `select_host(hosts, role, props)` and `register_host_selector(name, selector)` — strategy-based selection.
+        whenToUse: |
+          Use it to read topology, register a custom host-selection strategy, or pick a
+          host by role (writer/reader) and strategy.
+      - name: "Dialect Service"
+        short: "Dialect Service"
+        global: false
+        api: "`service_container.dialect_service`"
+        summary: |
+          Resolves and caches the database dialect (`db_dialect`) and the underlying
+          driver dialect (`driver_dialect`).
+        offers: |
+          - `db_dialect` — the resolved database dialect (Aurora PG/MySQL, RDS, Multi-AZ, etc.).
+          - `driver_dialect` — the driver-level dialect (network-bound methods, etc.).
+        whenToUse: |
+          Use it when behavior depends on the database/driver — for example the
+          `FailoverPlugin` subscribes to the dialect's network-bound methods.
+      - name: "Session State Service"
+        short: "Session State Service"
+        global: false
+        api: "`service_container.session_state_service`"
+        summary: |
+          Tracks per-connection session state (transaction status, autocommit) so it can
+          be preserved across a connection switch.
+        offers: |
+          - `in_transaction?` / `autocommit?` — current session flags.
+          - `update_transaction_state(method_name, args, autocommit_before)` — fold a method call into the tracked state.
+          - `begin` / `complete` / `reset` — bracket a connection switch.
+        whenToUse: |
+          Use it when a plugin swaps connections and must carry session state (e.g.
+          autocommit, open transaction) onto the new connection.
+      - name: "Storage Service"
+        short: "Storage Service"
+        global: true
+        api: "`service_container.storage_service`"
+        summary: |
+          A centralized cache registry of named partitions, each with its own TTL and
+          background cleanup thread. Shared across the wrapper.
+        offers: |
+          - `register(name, ttl:)` — create a named cache partition.
+          - `set(name, key, value)` / `get(name, key)` — store and read items.
+          - `get_if_registered(name, key)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
+          - `exists?(name, key)` / `remove(name, key)` / `clear(name)` / `clear_all`.
+        whenToUse: |
+          Use it to cache data reused across the wrapper — for example the
+          `RdsHostListProvider` caches cluster topology here. Reads publish a
+          `DataAccessEvent` (unless `register_access: false`), which keeps related
+          monitors alive.
+      - name: "Monitor Service"
+        short: "Monitor Service"
+        global: true
+        api: "`service_container.monitor_service`"
+        summary: |
+          Manages background monitor lifecycle: registration, deduplication, expiration,
+          and cleanup. Subscribes to `DataAccessEvent` to extend monitor TTLs.
+        offers: |
+          - `register_type(monitor_type, expiration_timeout_sec:, produced_data_type:)` — declare a monitor type.
+          - `run_if_absent(monitor_type, key, service_container) { ... }` — start once, then reuse.
+          - `get(...)` / `stop_and_remove(...)` — look up or stop a monitor.
+        whenToUse: |
+          Use it for shared background work — for example the `RdsHostListProvider`
+          lazily starts a `ClusterTopologyMonitor` that caches topology in the Storage
+          Service. Monitors that produce a `produced_data_type` have their expiry
+          extended whenever that data is read.
+      - name: "Event Publisher"
+        short: "Event Publisher"
+        global: true
+        api: "`service_container.event_publisher`"
+        summary: |
+          A `BatchingEventPublisher` — a publish/subscribe bus that delivers immediate
+          events synchronously and batches the rest, deduplicating via `Set` semantics.
+        offers: |
+          - `subscribe(subscriber, event_classes)` / `unsubscribe(...)`.
+          - `publish(event)` — immediate delivery or batched by `immediate_delivery?`.
+          - `release_resources` — stop the background publishing thread.
+        whenToUse: |
+          Use it to decouple event producers and consumers. For example the Storage
+          Service publishes a `DataAccessEvent` on cache reads, and the Monitor Service
+          subscribes to it to extend the matching monitor's expiration.
+      - name: "Plugin Manager"
+        short: "Plugin Manager"
+        global: false
+        api: "`service_container.plugin_manager`"
+        summary: |
+          Loads and initializes the plugins and drives the [pipelines](./pipelines).
+          It is itself a service in the container. See [Plugin Manager](#plugin-manager).
+        offers: |
+          - Reads the `wrapper_plugins` connection parameter, sorts plugins by weight, and instantiates each with `(service_container, props)`.
+          - Always appends `DefaultPlugin` last as the pipeline terminus.
+          - Builds the `connect`, `internal_connect`, and `execute` pipelines lazily per method.
+        whenToUse: |
+          You rarely call it directly from a plugin; it is the machinery that invokes
+          your plugin. See the dedicated [Plugin Manager](#plugin-manager) section below.
+
+# ----------------------------------------------------------------------------
+# Wrapper-only appended sections.
+# ----------------------------------------------------------------------------
+wrapperOnly:
+  pipelines:
+    ruby: |
+      ## Release Resources / Shutdown
+
+      The AWS Advanced Ruby Driver Wrapper performs graceful teardown through
+      `AwsAdvancedRubyDriverWrapper.release_resources`, invoked automatically by an
+      `at_exit` hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`.
+      `TERM`/`INT` signal traps simply call `exit`, so the real teardown always runs
+      from the `at_exit` hook (acquiring locks or joining threads inside a signal-trap
+      context is unsafe in Ruby and can deadlock). `release_resources` shuts down the
+      shared `MonitorService`, releases the `EventPublisher`'s background thread, and
+      clears the wrapper's caches. It is safe to call more than once, so you may also
+      invoke it directly for a deterministic shutdown.
+
+  loadable-plugins:
+    ruby: |
+      ### Creating a Custom Plugin
+
+      A plugin is a plain object constructed with `(service_container, props)`. It
+      defines a `subscribed_methods` set and implements any of `connect`,
+      `internal_connect`, and `execute`. Reach shared capabilities through the
+      service container — for example `service_container.host_service.hosts`,
+      `service_container.dialect_service.db_dialect`, or
+      `service_container.connection_service.current_connection`.
+
+      ```ruby
+      class MyPlugin
+        SUBSCRIBED = Set['*'].freeze
+
+        def initialize(service_container, props)
+          @service_container = service_container
+          @props = props
+        end
+
+        def subscribed_methods = SUBSCRIBED
+
+        def execute(ruby_method, next_plugin, *args, **kwargs, &block)
+          # ... run code before/after ...
+          next_plugin.call
+        end
+      end
+      ```
+
+      ### Register the Custom Plugin
+
+      Register the plugin code, factory class, and (optionally) a weight, then
+      include the code in the `wrapper_plugins` connection parameter:
+
+      ```ruby
+      AwsAdvancedRubyDriverWrapper::Services::PluginManager.register_plugin(
+        "my_plugin", MyPluginFactory, weight: 1000)
+      ```
+
+  development-guide:
+    ruby: |
+      ### Setting Up the AWS Advanced Ruby Driver Wrapper
+
+      Clone the repository and install the gem's dependencies with Bundler:
+
+      ```bash
+      cd aws-advanced-ruby-driver-wrapper
+      bundle install
+      ```
+
+      To test against a specific ActiveRecord version, use one of the matrix
+      gemfiles:
+
+      ```bash
+      BUNDLE_GEMFILE=gemfiles/activerecord_8.0.gemfile bundle install
+      ```
+
+      ### Running the Tests
+
+      Unit tests run with RSpec and also validate your environment is set up
+      correctly:
+
+      ```bash
+      bundle exec rspec spec/unit
+      ```
+
+  integration-tests:
+    ruby: |
+      ### Unit vs integration tests
+
+      Unit tests run purely with RSpec (`bundle exec rspec spec/unit`) against `spec/unit`.
+      The integration tests live under `spec/integration` and are orchestrated by
+      Gradle in Docker against a real (or reused) Aurora cluster, using the
+      standardized env-vars and tasks above.

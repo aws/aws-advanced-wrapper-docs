@@ -1,0 +1,24 @@
+{#
+  The "only one plugin from this group" warning, written once.
+
+  Every page for a plugin in a mutually exclusive group renders this, so the
+  wording must not be duplicated per template — it already drifted once, leaving
+  the Global Database Failover page saying "any other failover plugin" without
+  ever naming the plugin it conflicts with.
+
+  The sentence adapts to how many other plugins the group holds FOR THE CURRENT
+  WRAPPER, which is why `others` is passed in already filtered:
+
+    one other  -> names it, because "the other `failover` plugin" is actionable
+                  where "any other failover plugin" leaves the reader guessing.
+    several    -> lists them in parentheses.
+    none       -> falls back to the generic phrasing rather than emitting a
+                  sentence with a dangling reference.
+#}
+{% macro exclusivity(group_label, this_code, others) -%}
+Only one {{ group_label }} plugin may be enabled per connection. Do not use `{{ this_code }}` together with
+{%- if others | length == 1 %} the other `{{ others[0] }}` plugin
+{%- elif others | length > 1 %} any of the other {{ group_label }} plugins ({% for c in others %}`{{ c }}`{% if not loop.last %}, {% endif %}{% endfor %})
+{%- else %} any other {{ group_label }} plugin
+{%- endif %} at the same time for the same connection.
+{%- endmacro %}

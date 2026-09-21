@@ -1,0 +1,128 @@
+---
+title: Configuring TLS/SSL
+---
+
+Traffic between the AWS Advanced Ruby Driver Wrapper and your database cluster can be secured
+with TLS/SSL. TLS is configured with the same connection properties you would use with
+the underlying `mysql2` or `pg` driver directly: the wrapper passes those properties
+straight through to the driver.
+
+This applies to **every** connection the wrapper opens — including the ones it makes on
+your behalf for topology discovery, monitoring, and failover — because those use the same
+driver and the same properties. Configure TLS once in your connection properties and it
+applies everywhere.
+
+## Recommended settings
+
+We strongly recommend a TLS 1.2+ connection **with certificate verification**:
+
+| Driver | Verification property | Certificate authority property |
+|---|---|---|
+| PostgreSQL (`pg`) | `sslmode: verify-full` | `sslrootcert` |
+| MySQL (`mysql2`) | `ssl_mode: verify_identity` | `sslca` |
+
+`verify-full` and `verify_identity` check both the certificate chain **and** that the
+hostname matches the certificate, which is what protects the connection against a
+man-in-the-middle. Anything weaker leaves the connection open to impersonation — `require`,
+for instance, encrypts the traffic but never confirms which server is on the other end.
+
+## The wrapper does not turn TLS on for you
+
+:::warning
+The wrapper does not force TLS on, and it does not override the TLS properties you
+provide. Omit them and the connection is made exactly as the underlying driver would make
+it. Enabling TLS, and choosing a verification mode, is your responsibility.
+:::
+
+Whether the *server* insists on TLS is a separate setting that you control on the
+database, not in the wrapper, and it varies by engine and version:
+
+- **PostgreSQL** — the `rds.force_ssl` parameter. It defaults to `1` (TLS required) on RDS
+  for PostgreSQL 15 and later, and to `0` (optional) on 14 and older. While it is on,
+  non-TLS connection attempts are rejected.
+- **MySQL** — the `require_secure_transport` parameter, off by default, which rejects
+  non-TLS connections once enabled.
+
+So depending on your engine, version, and parameter group, the server may or may not
+require TLS. The wrapper honours whatever you configure on both sides: it neither relaxes
+a server-side requirement nor imposes one of its own.
+
+## Examples
+
+Through Active Record, TLS properties sit alongside the other connection keys:
+
+```yaml
+# config/database.yml — PostgreSQL
+production:
+  adapter: aws_postgresql
+  host: my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com
+  database: mydb
+  username: <username>
+  password: <password>
+  sslmode: verify-full
+  sslrootcert: /path/to/global-bundle.pem
+```
+
+```yaml
+# config/database.yml — MySQL
+production:
+  adapter: aws_mysql2
+  host: my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com
+  database: mydb
+  username: <username>
+  password: <password>
+  ssl_mode: verify_identity
+  sslca: /path/to/global-bundle.pem
+```
+
+Using the driver directly, they are keyword arguments:
+
+```ruby
+# PostgreSQL
+AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+  user: '<username>',
+  password: '<password>',
+  dbname: 'mydb',
+  sslmode: 'verify-full',
+  sslrootcert: '/path/to/global-bundle.pem'
+)
+```
+
+```ruby
+# MySQL
+AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
+  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+  username: '<username>',
+  password: '<password>',
+  database: 'mydb',
+  ssl_mode: 'verify_identity',
+  sslca: '/path/to/global-bundle.pem'
+)
+```
+
+## Certificate bundle
+
+When connecting to an RDS or Aurora endpoint, use the AWS global certificate bundle as the
+certificate authority. Download it from the
+[RDS SSL/TLS documentation](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html).
+
+If you connect through something that is not an RDS endpoint — a proxy, or your own domain
+name — the certificate authority you supply must be the one appropriate for *that*
+endpoint, not for the RDS endpoint behind it.
+
+For TLS options beyond those shown here, see the driver documentation:
+[`pg`](https://github.com/ged/ruby-pg) and [`mysql2`](https://github.com/brianmario/mysql2).
+
+## Why this matters for authentication plugins
+
+TLS is not optional in practice when a credential travels over the connection:
+
+- [IAM Authentication](using-plugins/iam-authentication) sends the generated token as the
+  password. With MySQL it is sent in cleartext, because IAM authentication relies on the
+  `mysql_clear_password` client plugin.
+- [AWS Secrets Manager](using-plugins/aws-secrets-manager) sends the retrieved password on
+  the connection like any other password.
+
+In both cases TLS with verification is what keeps that credential from being readable, or
+the server from being impersonated, in transit.

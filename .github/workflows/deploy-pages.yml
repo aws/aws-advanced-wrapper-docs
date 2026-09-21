@@ -1,0 +1,89 @@
+name: Deploy Docs to GitHub Pages
+
+# Publishes the Docusaurus build to https://aws.github.io/aws-advanced-wrapper-docs/.
+#
+# Runs on every push to main that touches the content, the generator, or the
+# site. Merges are already gated on Verify Docs (see verify-docs.yml), so by
+# the time we get here the generated files are known-fresh; this workflow
+# still re-runs `python generate.py` before building so a hand-edited main
+# branch cannot ship stale content.
+#
+# The repo's Pages setting must be:
+#     Settings -> Pages -> Source: "GitHub Actions"
+# If it is set to "Deploy from a branch", this workflow will succeed but its
+# output will not be served.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/**'
+      - 'generate.py'
+      - 'requirements.txt'
+      - 'site/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+# Least-privilege token, plus the two extra scopes Pages deploys need.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one live Pages deployment at a time. Don't cancel in-progress deploys —
+# a half-finished deploy is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install generator dependencies
+        run: pip install -r requirements.txt
+
+      - name: Re-run the generator
+        run: python generate.py
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Build the site
+        working-directory: site
+        run: npm run build
+
+      - name: Upload the built site as a Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

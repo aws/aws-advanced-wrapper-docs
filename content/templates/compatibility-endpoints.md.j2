@@ -1,0 +1,32 @@
+---
+title: {{ page_title }}
+---
+
+{% import "partials/compatibility-macros.md.j2" as m %}
+This page is part of the [Compatibility Guide](../compatibility) and explains plugin compatibility with database endpoints. Many endpoint types can be used with the {{ wrapper.wrapperName }}, but some endpoints are not compatible with some plugins.
+
+## Endpoint types
+
+{% for e in compat.endpoint_reference %}
+- {% if e.url %}[{{ e.label }}]({{ e.url }}){% else %}{{ e.label }}{% endif %}{% if e.pattern %} — `{{ e.pattern }}`{% endif %}
+
+{% endfor %}
+## Compatibility matrix
+
+{{ m.legend() }}
+
+| Plugin | {% for c in compat.ep_columns %}{{ c }} | {% endfor %}
+
+| --- | {% for c in compat.ep_columns %}--- | {% endfor %}
+
+{% for p in compat.plugins %}
+| {{ m.plugin_label(p, 1) }} | {% for c in compat.ep_columns %}{{ m.cell(compat.ep[p.code][c]) }} | {% endfor %}
+
+{% endfor %}
+
+## Notes
+
+{% for note in compat.ep_notes %}
+[^{{ note.n }}]: {{ note.text }}
+
+{% endfor %}

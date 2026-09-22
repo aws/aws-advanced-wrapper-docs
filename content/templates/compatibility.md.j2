@@ -1,0 +1,28 @@
+---
+title: {{ page_title }}
+---
+
+{% import "partials/compatibility-macros.md.j2" as m %}
+# Plugin Compatibility
+
+Some plugins depend on metadata that only particular database types provide, and some
+plugins do not work correctly alongside others. This guide records those constraints for
+the {{ wrapper.wrapperName }}.
+
+The following matrices help you verify plugin compatibility with other plugins and with database types. Some plugins are also sensitive to the endpoint used in the connection string.
+
+- [Database type compatibility](./compatibility/database-types)
+- [Database URL type compatibility](./compatibility/endpoints)
+- [Cross-plugin compatibility](./compatibility/cross-plugins)
+
+{{ m.legend(with_notes=false) }}
+{% if compat.universal %}
+
+## Compatible with everything
+
+These plugins record no database-type, endpoint, or cross-plugin constraints:
+
+{% for p in compat.universal %}
+- {{ m.plugin_label(p, 0) }}{% if p.description %} — {{ p.description }}{% endif %}
+{% endfor %}
+{% endif %}

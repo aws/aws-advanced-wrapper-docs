@@ -16,6 +16,7 @@ will follow your choice where an equivalent page exists.
 - **[Set up by Scenario](setup)** — answer a few questions about your application and get a working configuration, with add-ons you can toggle
 - **[Using Plugins](enhanced-failover)** — the feature plugins, what each one does, and how to configure it
 - **[Shared Configuration](configuring-tls)** — settings that several plugins rely on rather than belonging to any one of them
+- **[Compatibility](compatibility)** — which plugins work with which database types, endpoint types, and each other
 - **[Development Guide](development-guide)** — internals, for contributing to the wrapper rather than using it
 
 ## Getting started
@@ -95,5 +96,5 @@ The calls your code already makes on the driver connection keep working, and the
 
 ### Next
 
-Not sure which plugins you need? [Set up by Scenario](setup) builds a configuration from a few questions about your application.
+Not sure which plugins you need? [Set up by Scenario](setup) builds a configuration from a few questions about your application. To check a combination before shipping, see [Plugin Compatibility](compatibility).
 

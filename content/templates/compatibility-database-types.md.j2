@@ -1,0 +1,26 @@
+---
+title: {{ page_title }}
+---
+
+{% import "partials/compatibility-macros.md.j2" as m %}
+This page is part of the [Compatibility Guide](../compatibility) and explains plugin compatibility with database types and deployments. Some plugins need metadata that only particular database types provide, and some depend on features a deployment does not offer.
+
+{{ m.legend() }}
+
+## Compatibility matrix
+
+| Plugin | {% for c in compat.db_columns %}{{ c }} | {% endfor %}
+
+| --- | {% for c in compat.db_columns %}--- | {% endfor %}
+
+{% for p in compat.plugins %}
+| {{ m.plugin_label(p, 1) }} | {% for c in compat.db_columns %}{{ m.cell(compat.db[p.code][c]) }} | {% endfor %}
+
+{% endfor %}
+
+## Notes
+
+{% for note in compat.db_notes %}
+[^{{ note.n }}]: {{ note.text }}
+
+{% endfor %}

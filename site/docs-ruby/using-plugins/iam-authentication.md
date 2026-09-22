@@ -131,6 +131,8 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 
 ```
 
+Verify plugin compatibility within your Ruby configuration using the [compatibility guide](../compatibility).
+
 ## Configuration parameters
 
 | Parameter | Type | Required | Default | Description |
@@ -164,6 +166,15 @@ permission so the token-generation path can resolve the writer region.
     ]
 }
 ```
+
+When you connect through an **Aurora Global Database endpoint**, also enable the
+[Initial Connection Strategy plugin](./initial-connection-strategy) (`initial_connection`).
+A global endpoint carries no region and points at whichever regional cluster is
+currently the primary, so the plugin resolves it to the actual writer instance
+before the IAM token is generated — without it, the token may be minted for the
+wrong host or region. This applies specifically to the global endpoint; when you
+connect through a regular regional cluster endpoint (writer, reader, or custom) the
+region is already part of the hostname and IAM works without `initial_connection`.
 
 
 ## Token caching

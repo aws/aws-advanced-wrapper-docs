@@ -80,6 +80,8 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 
 ```
 
+Verify plugin compatibility within your Ruby configuration using the [compatibility guide](../compatibility).
+
 ## Configuration parameters
 
 | Parameter | Type | Required | Default | Description |

@@ -50,6 +50,7 @@ wrappers:
     availableSince: "1.0.0 (default plugin)"
     codeLang: "ruby"
     pluginListParam: "wrapper_plugins"
+    compatibilityGuide: "../compatibility"
     pluginGroups:
       failover: [failover, gdb_failover]
       auth: [iam, secrets_manager]
@@ -159,7 +160,8 @@ wrappers:
           blocks:
             - text: >-
                 Not sure which plugins you need? [Set up by Scenario](setup) builds a
-                configuration from a few questions about your application.
+                configuration from a few questions about your application. To check a
+                combination before shipping, see [Plugin Compatibility](compatibility).
 
 parameters:
   - concept: failoverMode
@@ -267,6 +269,7 @@ enhanced:
       legacyProviderName: Topology provider
       clusterIdParam: cluster_id
       availableSince: "1.0.0 (default plugin)"
+      compatibilityGuide: "./compatibility"
       hostPatternParam: cluster_instance_host_pattern
       monitoringPrefix: "topology_monitoring_"
       connectSnippet: |

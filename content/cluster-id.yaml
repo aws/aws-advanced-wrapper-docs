@@ -1,0 +1,63 @@
+# Configuration and code examples for the Cluster ID shared configuration page.
+# Each wrapper has different parameter names, code styles, and multi-cluster example patterns.
+
+wrappers:
+  ruby:
+    paramName: "cluster_id"
+    paramType: "String"
+    description: "Unique identifier for a cluster. Connections with the same identifier share one topology monitor and cache; different clusters must use different identifiers."
+    # Single cluster example
+    singleClusterExample: |
+      conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+        host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+        user: 'postgres',
+        password: 'password',
+        dbname: 'mydb',
+        cluster_id: 'cluster-a'
+      )
+    # Multi-cluster example
+    multiClusterExample: |
+      # Connection 1 to Cluster A
+      conn1 = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+        host: 'cluster-a.cluster-xyz.us-east-1.rds.amazonaws.com',
+        user: 'postgres',
+        password: 'password',
+        dbname: 'mydb',
+        cluster_id: 'cluster-a'
+      )
+
+      # Connection 2 to Cluster A (shares topology cache and monitor with conn1)
+      conn2 = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+        host: 'cluster-a.cluster-xyz.us-east-1.rds.amazonaws.com',
+        user: 'postgres',
+        password: 'password',
+        dbname: 'mydb',
+        cluster_id: 'cluster-a'
+      )
+
+      # Connection 3 to Cluster B (separate topology cache and monitor)
+      conn3 = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+        host: 'cluster-b.cluster-abc.eu-west-1.rds.amazonaws.com',
+        user: 'postgres',
+        password: 'password',
+        dbname: 'mydb',
+        cluster_id: 'cluster-b'
+      )
+    # Active Record example
+    activeRecordExample: |
+      # config/database.yml
+      production_a:
+        adapter: aws_postgresql
+        host: cluster-a.cluster-xyz.us-east-1.rds.amazonaws.com
+        database: mydb
+        username: postgres
+        password: password
+        cluster_id: cluster-a
+
+      production_b:
+        adapter: aws_postgresql
+        host: cluster-b.cluster-abc.eu-west-1.rds.amazonaws.com
+        database: mydb
+        username: postgres
+        password: password
+        cluster_id: cluster-b

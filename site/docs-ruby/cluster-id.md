@@ -1,0 +1,134 @@
+---
+title: Cluster ID
+---
+
+## Overview
+
+The `cluster_id` parameter is a critical configuration setting when using the AWS Advanced Ruby Driver Wrapper to **connect to multiple database clusters within a single application**. This parameter serves as a unique identifier that enables the wrapper to maintain separate topology caches and monitoring state for each distinct database cluster.
+
+## What is a cluster?
+
+Understanding what constitutes a cluster is crucial for correctly setting the `cluster_id` parameter. In the context of the AWS Advanced Wrapper family, a **cluster** is a logical grouping of database instances that should share the same topology cache and monitoring services.
+
+A cluster represents:
+
+- **One writer instance** (primary)
+- **Zero or more reader instances** (replicas)
+- **A shared topology** that the wrapper tracks
+- **A shared failover domain** — the group of instances the wrapper can reconnect to when a failover is detected
+
+### Examples of clusters
+
+- **Aurora DB Cluster** — one writer + multiple readers
+- **RDS Multi-AZ DB Cluster** — one writer + two readers
+- **Aurora Global Database** — when supplying a global DB endpoint, treated as a single cluster
+- **Plain RDS database** — a single instance (one "writer", zero readers)
+
+## Why cluster_id matters
+
+The AWS Advanced Ruby Driver Wrapper uses the `cluster_id` as a **key for internal caching and state management** to optimize performance and maintain cluster-specific information. Without proper `cluster_id` configuration, your application may experience:
+
+- **Cache collisions** — topology from one cluster contaminating another
+- **Incorrect connection routing** — failover attempting to reconnect to the wrong instance pool
+- **Stale host information** — topology updates failing to propagate correctly
+- **Topology monitor confusion** — the background topology discovery task getting stale data from different clusters mixed together
+
+## Rule of thumb
+
+> **If the wrapper should track separate topology information and perform independent failover operations, use different `cluster_id` values. If instances share the same topology and failover domain, use the same `cluster_id`.**
+
+## When you need it
+
+You **must** set `cluster_id` when:
+
+- Your application creates connections to **two or more distinct clusters** (e.g., a writer in `us-east-1` and a reader in `us-west-2`, or separate production and analytics databases).
+
+You **do not** need to set `cluster_id` when:
+
+- Your application connects to only one cluster.
+- Connections are to different instances within the same cluster (e.g., two writer endpoints pointing to the same cluster, or a writer and a reader from the same cluster).
+
+## How to use it
+
+The `cluster_id` is set as a connection property. Each connection that should share topology and monitoring state uses the same `cluster_id`. Connections with different `cluster_id` values maintain independent state:
+
+```ruby
+# Connection 1 to Cluster A
+conn1 = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+  host: 'cluster-a.cluster-xyz.us-east-1.rds.amazonaws.com',
+  user: 'postgres',
+  password: 'password',
+  dbname: 'mydb',
+  cluster_id: 'cluster-a'
+)
+
+# Connection 2 to Cluster A (shares topology cache and monitor with conn1)
+conn2 = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+  host: 'cluster-a.cluster-xyz.us-east-1.rds.amazonaws.com',
+  user: 'postgres',
+  password: 'password',
+  dbname: 'mydb',
+  cluster_id: 'cluster-a'
+)
+
+# Connection 3 to Cluster B (separate topology cache and monitor)
+conn3 = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+  host: 'cluster-b.cluster-abc.eu-west-1.rds.amazonaws.com',
+  user: 'postgres',
+  password: 'password',
+  dbname: 'mydb',
+  cluster_id: 'cluster-b'
+)
+
+```
+
+With Active Record, set it in `config/database.yml`:
+
+```yaml
+# config/database.yml
+production_a:
+  adapter: aws_postgresql
+  host: cluster-a.cluster-xyz.us-east-1.rds.amazonaws.com
+  database: mydb
+  username: postgres
+  password: password
+  cluster_id: cluster-a
+
+production_b:
+  adapter: aws_postgresql
+  host: cluster-b.cluster-abc.eu-west-1.rds.amazonaws.com
+  database: mydb
+  username: postgres
+  password: password
+  cluster_id: cluster-b
+
+```
+## Topology cache and monitor sharing
+
+When multiple connections share the same `cluster_id`:
+
+- **One topology monitor per cluster_id** — the wrapper runs a background task (the **topology monitor**) that refreshes cluster topology at regular intervals. All connections with the same `cluster_id` share this single topology monitor, reducing overhead.
+- **Shared topology cache** — all connections with the same `cluster_id` see the same up-to-date host list and roles (writer vs. reader).
+- **Shared topology monitor context** — the topology monitor uses credentials and connection settings from the first connection that creates it. Subsequent connections reuse that topology monitor, regardless of their own user or database. If you need the topology monitor to use different timeouts or connection settings than your application connections, use the `topology_monitoring_*` property prefix on all connections with that `cluster_id` so the topology monitor gets the intended configuration from the first connection to create it.
+
+For full configuration details, see [Configuring topology-monitoring connections in the Enhanced Failover Plugin](./enhanced-failover#configuring-topology-monitoring-connections).
+
+## Choosing cluster_id values
+
+`cluster_id` can be any string. Common conventions:
+
+- **Descriptive names** — `'prod-primary'`, `'prod-replica'`, `'staging'`, `'analytics'`
+- **DNS-based** — `'cluster-a-us-east-1'`, `'cluster-b-eu-west-1'`
+- **Role-based** — `'writer'`, `'reader'`, `'failover-target'`
+
+The exact value is up to you. What matters is consistency: all connections that should share state use the same value, and different clusters use different values.
+
+## Performance and overhead
+
+Sharing a `cluster_id` reduces overhead:
+
+- **One monitor thread** instead of many monitoring the same cluster.
+- **One topology cache** instead of many caches holding the same information.
+- **One set of host tracking** for failover and connection routing.
+
+Using separate `cluster_id` values for genuinely different clusters is the right choice — it avoids cache collisions and incorrect routing — but using the same value for different clusters is dangerous and using different values for the same cluster wastes resources. Choose carefully.

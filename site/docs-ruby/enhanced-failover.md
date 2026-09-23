@@ -187,7 +187,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 
 ```
 
-The monitor is shared once per `cluster_id`, and the first connection that creates it supplies the monitor's connection context. Connections that share a cluster identifier therefore share the monitor and its credentials/database context. If those connections use different database users or databases, configure explicit monitor credentials and apply the same values to every connection so that monitor creation order does not select an unsuitable context.
+The monitor is shared once per `cluster_id`, and the first connection that creates it supplies the monitor's connection context. Connections that share a cluster identifier therefore share the monitor and its database context. For details on monitor sharing and multi-connection scenarios, see [Cluster ID](./cluster-id).
 
 The topology monitor uses the prefixed driver and wrapper properties to build its monitoring connection. The monitor uses the same cluster topology cache for all connections that share the cluster identifier.
 

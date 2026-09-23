@@ -27,7 +27,8 @@ const sidebars = {
       items: [
         "configuring-tls",
         "aws-credentials",
-        "host-selection-strategies"
+        "host-selection-strategies",
+        "cluster-id"
       ],
     },
     {

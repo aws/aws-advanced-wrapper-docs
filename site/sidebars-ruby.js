@@ -51,7 +51,8 @@ const sidebars = {
         "development-guide/service-container",
         "development-guide/pipelines",
         "development-guide/loadable-plugins",
-        "development-guide/integration-tests"
+        "development-guide/integration-tests",
+        "development-guide/performance"
       ],
     }
   ],

@@ -15,6 +15,13 @@ site/.docusaurus/
 #   site/sidebars-<wrapper>.js
 #   site/src/generated/       manifest.json + scenarios-<wrapper>.json
 
+# Secrets / credentials (never commit real credentials)
+.env
+.env.*
+*.pem
+*.key
+*.credentials
+
 # Editor / OS
 .idea/
 .DS_Store

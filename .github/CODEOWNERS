@@ -1,0 +1,3 @@
+# CODEOWNERS — require review from the designated owner on all changes.
+
+*   @aws/atlas-dev-support

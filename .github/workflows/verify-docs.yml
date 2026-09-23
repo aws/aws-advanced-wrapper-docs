@@ -1,0 +1,90 @@
+name: Verify Docs
+
+# Runs on every PR that touches the generator input, the generator itself, or
+# the site.
+#
+#   verify-generated-fresh   Re-runs `python generate.py` and fails if the
+#                            output differs from what the PR committed. This
+#                            catches contributors who edited content/ (or a
+#                            template) without regenerating site/docs-<wrapper>/,
+#                            site/sidebars-<wrapper>.js, or site/src/generated/.
+#
+#   build-site               Runs `npm ci && npm run build` under site/ so we
+#                            catch broken Markdown, dead links, or bad Mermaid
+#                            fences that Docusaurus flags at build time.
+#
+# Paths are filtered so that README-only or CONTRIBUTING-only edits don't burn
+# CI minutes on a full regenerate + build.
+
+on:
+  pull_request:
+    paths:
+      - 'content/**'
+      - 'generate.py'
+      - 'requirements.txt'
+      - 'site/**'
+      - '.github/workflows/verify-docs.yml'
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same ref when a new commit is pushed.
+concurrency:
+  group: verify-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-generated-fresh:
+    name: Verify generated docs are fresh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install generator dependencies
+        run: pip install -r requirements.txt
+
+      - name: Re-run the generator
+        run: python generate.py
+
+      - name: Fail if the committed output is stale
+        run: |
+          # `git add -A` stages every change AND every new file, so the diff
+          # below catches modified, deleted, and freshly-created files alike.
+          git add -A
+          if ! git diff --cached --quiet; then
+            echo "::error title=Generated docs are stale::The files under site/docs-<wrapper>/, site/sidebars-<wrapper>.js, or site/src/generated/ do not match what 'python generate.py' produces from content/. Run 'python generate.py' locally, commit the resulting changes, and push again."
+            echo ""
+            echo "----- Diff of stale files -----"
+            git --no-pager diff --cached
+            exit 1
+          fi
+
+  build-site:
+    name: Build the Docusaurus site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Build the site
+        working-directory: site
+        run: npm run build

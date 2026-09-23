@@ -1,0 +1,25 @@
+root = true
+
+[*]
+trim_trailing_whitespace = true
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+indent_size = 2
+
+[*.py]
+indent_size = 4
+
+[{*.sh}]
+end_of_line = lf
+
+[{*.bat,*.cmd}]
+end_of_line = crlf
+
+[*.md]
+# Trailing whitespace is significant in Markdown (two trailing spaces => <br>).
+trim_trailing_whitespace = false
+
+[*.{md,md.j2}]
+# Jinja templates render into Markdown; preserve the same whitespace rules.
+trim_trailing_whitespace = false

@@ -344,6 +344,34 @@ wrappers:
           You rarely call it directly from a plugin; it is the machinery that invokes
           your plugin. See the dedicated [Plugin Manager](#plugin-manager) section below.
 
+    perf:
+      driverNames: "`mysql2`/`pg`"
+      # Rough magnitude of the fixed per-call cost, stated in the intro.
+      fixedCostMagnitude: "a microsecond"
+      # The end-to-end real-database benchmark: display name (inline code) and link.
+      realDbBenchmarkName: "`wrapper_perf_spec.rb`"
+      realDbBenchmarkPath: "`spec/integration/wrapper_perf_spec.rb`"
+      realDbBenchmarkUrl: "https://github.com/aws/aws-advanced-ruby-driver-wrapper/blob/main/spec/integration/wrapper_perf_spec.rb"
+      # The fake-target micro-benchmark suite: link and a short description of its coverage.
+      microBenchmarksUrl: "https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/benchmarks"
+      microBenchmarksCoverage: "per-call overhead, plugin-chain scaling, SQL inspection, endpoint classification, caches"
+      benchmarksReadmeUrl: "https://github.com/aws/aws-advanced-ruby-driver-wrapper/blob/main/benchmarks/README.md"
+      # The internal machinery the fixed cost is attributed to, listed in prose.
+      machinery: "the plugin pipeline, call-context handling, result wrapping"
+      # Per-call fixed-cost table: each wrapped operation and its measured overhead.
+      perCall:
+        - { operation: "`query`", overhead: "~0.9 µs" }
+        - { operation: "`prepare`", overhead: "~0.8 µs" }
+        - { operation: "`escape`", overhead: "~0.7 µs" }
+        - { operation: "`ping`", overhead: "~0.8 µs" }
+        - { operation: "a call routed through `method_missing`", overhead: "~2 µs" }
+      # Result-iteration behavior: the iteration method the wrapper routes through a
+      # single pipeline call, and the roughly flat overhead that results.
+      iterationMethod: "`each`"
+      iterationOverhead: "about 2 µs"
+      # The connection-pooling framework that amortizes the one-time connect cost.
+      poolFramework: "Active Record"
+
 # ----------------------------------------------------------------------------
 # Wrapper-only appended sections.
 # ----------------------------------------------------------------------------

@@ -293,3 +293,12 @@ pages:
     parent: development-guide-architecture
     template: integration-tests
     contextProfile: devguide
+
+  - id: development-guide-performance
+    path: development-guide/performance
+    title: Performance and Overhead
+    category: Development Guide
+    wrappers: [ruby]
+    parent: development-guide-guide
+    template: performance
+    contextProfile: devguide

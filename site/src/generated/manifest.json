@@ -222,6 +222,15 @@
       ],
       "parentPath": "development-guide/architecture",
       "category": "Development Guide"
+    },
+    "development-guide/performance": {
+      "path": "development-guide/performance",
+      "title": "Performance and Overhead",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "development-guide/development-guide",
+      "category": "Development Guide"
     }
   }
 }

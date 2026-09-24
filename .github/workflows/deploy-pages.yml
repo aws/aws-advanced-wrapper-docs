@@ -71,10 +71,51 @@ jobs:
         working-directory: site
         run: npm run build
 
+      # NOTE: This inlines actions/upload-pages-artifact@v3.0.1 rather than
+      # calling it. That action's final step is `actions/upload-artifact@v4`
+      # (a tag, not a SHA), which this repo's enterprise "actions must be
+      # pinned to a full-length commit SHA" policy rejects transitively — so
+      # the composite action cannot be used as-is (it fails the deploy with
+      # "actions/upload-artifact@v4 is not allowed ... must be pinned to a
+      # full-length commit SHA"). We reproduce its two steps here with
+      # upload-artifact pinned to a real SHA on the SAME major (v4) the Pages
+      # pipeline was built against, so the artifact format stays exactly what
+      # actions/deploy-pages@v4.0.5 expects. The tar invocation mirrors
+      # upstream (Linux runner): archive into $RUNNER_TEMP/artifact.tar with
+      # --dereference --hard-dereference, excluding .git/.github, uploaded under
+      # the artifact name `github-pages` that actions/deploy-pages downloads.
+      #
+      # Dependabot is configured to ignore actions/upload-artifact for this
+      # reason (see .github/dependabot.yml) so it does not raise PRs against
+      # this deliberately-pinned reference.
+      #
+      # TODO: Once actions/upload-pages-artifact cuts a RELEASE whose inner
+      # actions/upload-artifact is pinned to a full commit SHA (the fix is
+      # already on its `main` branch — actions/upload-artifact@043fb46 = v7.0.1
+      # — but not yet in a tagged upload-pages-artifact release), revert to a
+      # single step:
+      #     uses: actions/upload-pages-artifact@<that-release-sha>  # <version>
+      #     with:
+      #       path: site/build
+      # then delete these two steps, this note, and the matching
+      # actions/upload-artifact ignore entry in .github/dependabot.yml.
+      - name: Archive the built site into a Pages artifact tarball
+        run: |
+          tar \
+            --dereference --hard-dereference \
+            --directory site/build \
+            -cvf "$RUNNER_TEMP/artifact.tar" \
+            --exclude=.git \
+            --exclude=.github \
+            .
+
       - name: Upload the built site as a Pages artifact
-        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          path: site/build
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
 
   deploy:
     name: Deploy to GitHub Pages

@@ -522,6 +522,15 @@ def _profile_plugins(page, wid, regs):
     }
 
 
+def _profile_cluster_id(page, wid, regs):
+    """Context for the Cluster ID shared configuration page.
+
+    Exposes wrapper-specific parameter names, code examples, and wrapper-only sections.
+    """
+    reg = regs["cluster_id"]
+    return {"cluster_id": reg}
+
+
 CONTEXT_PROFILES = {
     "base": _profile_base,
     "failover": _profile_failover,
@@ -530,6 +539,7 @@ CONTEXT_PROFILES = {
     "devguide": _profile_devguide,
     "plugins": _profile_plugins,
     "scenarios": _profile_scenarios,
+    "cluster-id": _profile_cluster_id,
 }
 
 # Templates that imply a profile when a page omits `contextProfile`. Kept only
@@ -646,12 +656,14 @@ def main():
     compatibility_reg = load("compatibility.yaml")
     plugins_reg = load("plugins.yaml")
     scenarios_reg = load("scenarios.yaml")
+    cluster_id_reg = load("cluster-id.yaml")
     regs = {
         "failover": failover_reg,
         "devguide": devguide_reg,
         "compatibility": compatibility_reg,
         "plugins": plugins_reg,
         "scenarios": scenarios_reg,
+        "cluster_id": cluster_id_reg,
     }
 
     # Fail fast with friendly messages before rendering anything.

@@ -124,6 +124,15 @@
       "parentPath": "overview",
       "category": "Shared Configuration"
     },
+    "cluster-id": {
+      "path": "cluster-id",
+      "title": "Cluster ID",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Shared Configuration"
+    },
     "compatibility": {
       "path": "compatibility",
       "title": "Plugin Compatibility",

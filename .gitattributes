@@ -1,0 +1,13 @@
+* text=auto
+
+# Shell scripts must always use LF so they run inside Linux containers (a CRLF
+# shebang produces "/bin/bash^M: bad interpreter").
+*.sh text eol=lf
+
+# Docusaurus / Node tooling assumes LF for its own scripts.
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf

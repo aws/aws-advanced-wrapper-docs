@@ -9,7 +9,7 @@ export default function Home() {
   return (
     <Layout
       title="AWS Advanced Wrapper Docs"
-      description="Documentation for the AWS Advanced Ruby Driver Wrapper"
+      description="Documentation for the AWS Advanced Wrapper family"
     >
       <main className="container margin-vert--xl">
         <div className="row">

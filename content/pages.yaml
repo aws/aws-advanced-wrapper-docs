@@ -192,6 +192,15 @@ pages:
     template: host-selection-strategies
     contextProfile: base
 
+  - id: cluster-id
+    path: cluster-id
+    title: Cluster ID
+    category: Shared Configuration
+    wrappers: [ruby]
+    parent: overview
+    template: cluster-id
+    contextProfile: cluster-id
+
   # ---------------------------------------------------------------------------
   # Compatibility guide. Each wrapper renders only its own plugins.
   # ---------------------------------------------------------------------------

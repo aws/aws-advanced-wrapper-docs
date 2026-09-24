@@ -25,3 +25,12 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    ignore:
+      # deploy-pages.yml pins actions/upload-artifact by SHA on purpose: it is
+      # an inlined replacement for actions/upload-pages-artifact@v3.0.1 (whose
+      # internal actions/upload-artifact@v4 tag is rejected by the enterprise
+      # SHA-pinning policy). We deliberately track the v4 major the Pages
+      # pipeline was built for, so Dependabot must not raise bump PRs on it.
+      # Remove this entry when that inlining is reverted (see the TODO in
+      # .github/workflows/deploy-pages.yml).
+      - dependency-name: "actions/upload-artifact"

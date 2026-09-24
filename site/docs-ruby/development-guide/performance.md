@@ -61,8 +61,7 @@ from a distant client and small close to the cluster.
 
 ## Reproducing and going deeper
 
-- [`benchmarks/`](https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/benchmarks) holds the fake-target micro-benchmarks (per-call overhead, plugin-chain scaling, SQL
-  inspection, endpoint classification, caches) - stable, no infrastructure required.
+- [`benchmarks/`](https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/benchmarks) holds the fake-target micro-benchmarks (per-call overhead, plugin-chain scaling, SQL inspection, endpoint classification, caches) - stable, no infrastructure required.
 - [`spec/integration/wrapper_perf_spec.rb`](https://github.com/aws/aws-advanced-ruby-driver-wrapper/blob/main/spec/integration/wrapper_perf_spec.rb) is the end-to-end real-database comparison; run it from a
   host co-located with the cluster (a laptop over the internet is latency-dominated and its absolute
   numbers are not representative).

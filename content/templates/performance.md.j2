@@ -1,6 +1,9 @@
-{# Apache-2.0. Single-source Performance and Overhead page. Static prose: the
-   per-call figures are indicative and machine-dependent, regenerated from the
-   wrapper's own benchmarks rather than injected here. #}
+{# Apache-2.0. Single-source Performance and Overhead page. Shared prose lives
+   here; every wrapper-specific value — driver names, the per-call table, the
+   result-iteration figures, and the benchmark/spec links — comes from
+   content/dev-guide.yaml (wrappers.<id>.perf) so this template carries no
+   wrapper details. The per-call figures are indicative and machine-dependent,
+   regenerated from each wrapper's own benchmarks rather than injected here. #}
 ---
 title: {{ page_title }}
 ---
@@ -8,20 +11,20 @@ title: {{ page_title }}
 # Performance and Overhead
 
 Every database operation goes through the wrapper's plugin pipeline before reaching the underlying
-`mysql2`/`pg` driver, which adds some cost. The short version: the wrapper adds a **small, fixed
-amount of work per call** - on the order of a microsecond - and against a real query that cost is too
+{{ dg.perf.driverNames }} driver, which adds some cost. The short version: the wrapper adds a **small, fixed
+amount of work per call** - on the order of {{ dg.perf.fixedCostMagnitude }} - and against a real query that cost is too
 small to measure, dwarfed by the network round trip to the database.
 
 :::note
 
 All numbers below are **indicative and machine-dependent**. Regenerate them on your own hardware
-before relying on them. See the [benchmarks README](https://github.com/aws/aws-advanced-ruby-driver-wrapper/blob/main/benchmarks/README.md) to reproduce.
+before relying on them. See the [benchmarks README]({{ dg.perf.benchmarksReadmeUrl }}) to reproduce.
 
 :::
 
 ## Per-query overhead against a real database: negligible
 
-Measured end to end with the **default plugins** in `wrapper_perf_spec.rb`, running each operation through the wrapper and
+Measured end to end with the **default plugins** in {{ dg.perf.realDbBenchmarkName }}, running each operation through the wrapper and
 through the raw driver against the same cluster, from a host co-located with it (sub-millisecond
 round trips).
 
@@ -35,18 +38,16 @@ error, even against the fastest same-AZ query.
 
 To measure the fixed cost directly - without network noise - each wrapped call is run against an
 in-memory fake driver (no database, no plugins) paired with the identical raw call, so the difference
-is purely the wrapper's own machinery (the plugin pipeline, call-context handling, result wrapping).
+is purely the wrapper's own machinery ({{ dg.perf.machinery }}).
 
 | Operation | Overhead per call |
 | --- | --- |
-| `query` | ~0.9 µs |
-| `prepare` | ~0.8 µs |
-| `escape` | ~0.7 µs |
-| `ping` | ~0.8 µs |
-| a call routed through `method_missing` | ~2 µs |
+{% for row in dg.perf.perCall -%}
+| {{ row.operation }} | {{ row.overhead }} |
+{% endfor %}
 
-Result iteration is charged **once per `each` call, not per row** - the wrapper routes the whole
-iteration through a single pipeline call - so its overhead stays roughly flat (about 2 µs) whether the
+Result iteration is charged **once per {{ dg.perf.iterationMethod }} call, not per row** - the wrapper routes the whole
+iteration through a single pipeline call - so its overhead stays roughly flat ({{ dg.perf.iterationOverhead }}) whether the
 result has one row or a thousand.
 
 These figures are stable because there is no network involved. They are the fixed cost that, against
@@ -58,16 +59,15 @@ meaningful figure is the microseconds added, and a microsecond is nothing next t
 
 Establishing a connection with the default plugins is the one place the wrapper does measurably more than the raw
 driver: on the initial connection it performs an extra round trip or two to verify the endpoint role. This is a
-**one-time cost per connection**, not per query, and with a connection pool - as Active Record uses - it is paid at
+**one-time cost per connection**, not per query, and with a connection pool - as {{ dg.perf.poolFramework }} uses - it is paid at
 pool-fill and amortized across every query on that connection. Its size scales with connection latency, so it is larger
 from a distant client and small close to the cluster.
 
 ## Reproducing and going deeper
 
-- [`benchmarks/`](https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/benchmarks) holds the fake-target micro-benchmarks (per-call overhead, plugin-chain scaling, SQL
-  inspection, endpoint classification, caches) - stable, no infrastructure required.
-- [`spec/integration/wrapper_perf_spec.rb`](https://github.com/aws/aws-advanced-ruby-driver-wrapper/blob/main/spec/integration/wrapper_perf_spec.rb) is the end-to-end real-database comparison; run it from a
+- [`benchmarks/`]({{ dg.perf.microBenchmarksUrl }}) holds the fake-target micro-benchmarks ({{ dg.perf.microBenchmarksCoverage }}) - stable, no infrastructure required.
+- [{{ dg.perf.realDbBenchmarkPath }}]({{ dg.perf.realDbBenchmarkUrl }}) is the end-to-end real-database comparison; run it from a
   host co-located with the cluster (a laptop over the internet is latency-dominated and its absolute
   numbers are not representative).
 
-See the [benchmarks README](https://github.com/aws/aws-advanced-ruby-driver-wrapper/blob/main/benchmarks/README.md) for how to run everything.
+See the [benchmarks README]({{ dg.perf.benchmarksReadmeUrl }}) for how to run everything.

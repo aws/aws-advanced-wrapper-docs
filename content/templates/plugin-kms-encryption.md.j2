@@ -29,3 +29,11 @@ Verify plugin compatibility within your {{ wrapper.label }} configuration using 
 
 {{ block }}
 {% endfor %}
+{% if plugin.serverSideEnforcement %}
+
+{{ plugin.serverSideEnforcement }}
+{% endif %}
+{% if plugin.hardening %}
+
+{{ plugin.hardening | replace("{{ADMIN_UTILITY}}", plugin.adminUtility) }}
+{% endif %}

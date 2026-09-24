@@ -335,6 +335,12 @@ enhanced:
         ruby: { name: cluster_topology_high_refresh_rate_sec, type: float, required: "No", unit: s, default: "0.1" }
       description:
         ruby: "Interval between topology updates during the high-rate period after a new writer is detected."
+    - concept: clusterTopologyMaxInstanceMonitors
+      type: integer
+      spellings:
+        ruby: { name: cluster_topology_max_instance_monitors, required: "No", default: "16" }
+      description:
+        ruby: "Maximum number of per-instance topology monitors run in parallel during a topology update. When the cluster has more instances than this, only the first that many are monitored concurrently."
     - concept: failoverReaderHostSelectorStrategy
       type: string
       spellings:

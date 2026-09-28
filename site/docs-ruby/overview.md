@@ -35,7 +35,7 @@ gem 'pg'        # or: gem 'mysql2'
 bundle install
 ```
 
-That single require does everything: it registers the Active Record adapters and defines the connection classes for direct use.
+That single require does everything: it registers the Active Record adapters, `aws_postgresql` and `aws_mysql2`, and makes the driver connection classes available for direct use - all with no other changes to your application code.
 
 ### 2. Point Active Record at your cluster
 

@@ -8,6 +8,13 @@ updates:
     labels:
       - "dependencies"
       - "javascript"
+    groups:
+      site-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "pip"
     directory: "/"

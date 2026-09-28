@@ -306,6 +306,10 @@ statement while the plugin's own metadata tables are unreadable. It is
 logged — at `warn` when the target table is known to have encrypted columns,
 at `debug` otherwise.
 
+A table or column name the plugin cannot read in the connection's encoding
+is also left to the database, and logged at `warn`; see
+[Character encodings](#character-encodings).
+
 ### Not seen at all, so a plaintext is stored silently
 
 :::warning

@@ -815,6 +815,20 @@ plugins:
           :::
 
           :::warning
+          On PostgreSQL, this plugin also needs `pg_query`, which it uses to work out
+          which bind parameters belong to encrypted columns. Add it to your Gemfile:
+
+          ```ruby
+          gem 'pg_query'
+          ```
+
+          If `pg_query` is missing, connections with the plugin enabled fail with a
+          `LoadError` when they are set up. MySQL does not need `pg_query`.
+          `pg_query` builds a C extension when it is installed, so the first install
+          takes longer than for a pure-Ruby gem.
+          :::
+
+          :::warning
           To use this plugin, you must provide valid AWS credentials through the AWS
           SDK credential provider chain. Temporary credentials (AWS STS, IAM roles,
           SSO) expire, so ensure your provider refreshes them before they lapse.
@@ -1031,6 +1045,10 @@ plugins:
           logged — at `warn` when the target table is known to have encrypted columns,
           at `debug` otherwise.
 
+          A table or column name the plugin cannot read in the connection's encoding
+          is also left to the database, and logged at `warn`; see
+          [Character encodings](#character-encodings).
+
           ### Not seen at all, so a plaintext is stored silently
 
           :::warning
@@ -1057,6 +1075,50 @@ plugins:
             tool, another service, a wrapper connection whose `wrapper_plugins` does
             not include `kms_encryption`, and whatever was already in the table before
             the column was configured.
+        - |
+          ## Character encodings
+
+          **String values** are encrypted as UTF-8 text, whatever encoding the Ruby
+          string is in, and are always decrypted to a UTF-8 `String`. A UTF-16 or
+          Latin-1 `"grün"` reads back as the UTF-8 `"grün"`. A binary (`ASCII-8BIT`) string is treated as raw bytes
+          and reads back as binary. A string that has no UTF-8 form, for example
+          because it contains bytes that are invalid in its encoding, is refused with
+          `Errors::EncryptionError`.
+
+          **SQL** can be in any encoding. The plugin reads a UTF-8 copy of each
+          statement to find its encrypted columns, while the driver is sent the SQL
+          exactly as your application wrote it.
+
+          ### Known limitations
+
+          Both limitations below need a table or column name that isn't plain ASCII.
+          Encrypted tables and columns with ASCII names are unaffected.
+
+          - **Names the connection's encoding can't be read in.** On a connection that
+            isn't UTF-8, the plugin converts table and column names to UTF-8 to match
+            them against the encryption metadata. Ruby can't convert every character of
+            every encoding. For example, some characters of PostgreSQL's
+            `SHIFT_JIS_2004` and `EUC_JIS_2004` can't be converted, and Ruby can't
+            convert the `MULE_INTERNAL`, `EUC_TW`, `WIN1258` and `JOHAB` encodings at
+            all. When a name contains such a character, the plugin can't tell whether
+            its column is encrypted. It logs a warning, once for each name, and doesn't
+            encrypt or decrypt that column:
+            - A **write** is left to the [server-side trigger](#enforce-encryption-in-the-database),
+              which rejects the plaintext value.
+            - A **read** returns the stored encrypted bytes instead of the decrypted
+              value.
+          - **Binary SQL on a connection that isn't UTF-8.** A statement passed as a
+            binary (`ASCII-8BIT`) string has no encoding of its own, so the plugin reads
+            its bytes as UTF-8. On a connection in another encoding, a non-ASCII table
+            or column name in such a statement can't be read, and it's handled as in the
+            previous limitation.
+
+          :::tip
+          To avoid these limitations, use a UTF-8 connection (`client_encoding: 'UTF8'`
+          on PostgreSQL, `encoding: 'utf8mb4'` on MySQL, which are the defaults for
+          most setups), give encrypted tables and columns ASCII names, and pass SQL as
+          strings tagged with their real encoding rather than as binary.
+          :::
 
   # =========================================================================
   # Custom Endpoint Plugin

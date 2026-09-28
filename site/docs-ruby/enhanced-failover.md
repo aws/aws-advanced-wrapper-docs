@@ -158,6 +158,7 @@ In addition to parameters for the underlying database driver, configure the foll
 | `cluster_topology_refresh_rate_sec` | Float | No | `5.0` | Regular interval at which the topology monitor refreshes the cluster when it is stable. *(sec)* |
 | `failover_timeout_sec` | Float | No | `300.0` | Maximum time allowed to reconnect to a new writer or reader after failover starts. *(sec)* |
 | `cluster_topology_high_refresh_rate_sec` | Float | No | `0.1` | Interval between topology updates during the high-rate period after a new writer is detected. *(sec)* |
+| `cluster_topology_max_instance_monitors` | Integer | No | `16` | Maximum number of per-instance topology monitors run in parallel during a topology update. When the cluster has more instances than this, only the first that many are monitored concurrently. |
 | `failover_reader_host_selector_strategy` | String | No | `random` | Strategy used to select a reader node during reader failover. |
 | `cluster_id` | String | Required when one application uses multiple clusters; otherwise No | `1` | Unique identifier for a cluster. Connections with the same identifier share one topology monitor and cache; different clusters must use different identifiers. |
 | `enable_connect_failover` | Boolean | No | `false` | Enables cluster-aware failover when the initial connection fails because of a network exception. The initial connection may be redirected to another instance. |

@@ -594,6 +594,7 @@ addons:
       plugins: [kms_encryption]
       params:
         encryption_kms_region: "<your-region>"
+        encryption_allowed_master_key_arns: "<your-kms-key-arn>"
         encryption_metadata_schema: encrypt
       assumes:
         - "The metadata schema exists in the database and the application's role may read it."

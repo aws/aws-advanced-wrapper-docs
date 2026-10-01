@@ -76,6 +76,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   dbname: "mydb",
   wrapper_plugins: "kms_encryption",
   encryption_kms_region: "us-east-1",
+  encryption_allowed_master_key_arns: "arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab",
   encryption_audit_logging_enabled: true
 )
 
@@ -89,6 +90,7 @@ Verify plugin compatibility within your Ruby configuration using the [compatibil
 |-----------|------|----------|---------|-------------|
 | `encryption_kms_region` | String | Yes | AWS_REGION env var | AWS region for KMS encryption operations.<br/><br/>Example: `us-east-1` |
 | `encryption_kms_endpoint` | String | No | none | Endpoint URL override for KMS.<br/><br/>Example: `http://localhost:4566` |
+| `encryption_allowed_master_key_arns` | String | Yes | none | The KMS master keys the plugin may use, as a comma-separated string or an array. The plugin refuses to start without it. Each entry must match a `key_storage.master_key_arn` value exactly (the same ARN, alias, or key id that was used to set up the column). A data key that names any other master key, or none, is refused before KMS is called. See [Restrict the KMS keys the application can use](#restrict-the-kms-keys-the-application-can-use).<br/><br/>Example: `arn:aws:kms:us-east-1:123456789012:key/1234abcd-12ab-34cd-56ef-1234567890ab` |
 | `encryption_metadata_schema` | String | No | `encrypt` | Schema (or database, on MySQL) holding the `encryption_metadata` and `key_storage` tables.<br/><br/>Example: `app_encrypt` |
 | `encryption_metadata_cache_enabled` | Boolean | No | `true` | Cache the encryption metadata in memory. Leave enabled in production; when disabled, a short-lived metadata connection is opened for every statement that touches an encrypted column.<br/><br/>Example: `true` |
 | `encryption_metadata_cache_expiration_sec` | Float | No | `3600.0` | How long cached encryption metadata stays valid. *(sec)*<br/><br/>Example: `600.0` |
@@ -643,9 +645,37 @@ metadata schema.
 
 ### Restrict the KMS keys the application can use
 
-Grant the credentials the plugin runs under only the KMS actions they need,
-scoped to the specific master key ARN(s) recorded in `key_storage` — never
-`Resource: "*"`. Use a distinct key per environment.
+The plugin does not take the master key for a column from its own
+configuration: it reads it from the column's `key_storage` row and asks KMS
+to decrypt the data key under it. Two independent controls keep a changed row
+from pointing the plugin at a key it should not use.
+
+**List the permitted master keys in `encryption_allowed_master_key_arns`.**
+This property is required. Before every KMS call, the plugin checks the
+master key named by `key_storage` against the list. A key that is not listed,
+or a row that names no key, is refused with an `Errors::KeyManagementError`
+(code `KEY07`), and KMS is never called. The refusal applies to reads and
+writes alike, and `encryption_return_unverified_data` does not bypass it. The
+comparison is exact, so list each key in the same form (ARN, alias, or key
+id) that was passed to `Plugins::Encryption::KeyManagementUtility` when the column was set up. Add a
+new master key to the list before rotating a column onto it, or the
+application will refuse that column until the list is updated. Keep the old
+master key listed, and allowed `kms:Decrypt` in the application's IAM
+policy, until every value written before the rotation has been re-encrypted:
+those values are still wrapped under the old key, and reading one fails
+with `KEY07` once that key is removed from the list.
+`Plugins::Encryption::KeyManagementUtility` does not require the property, so a script can create a
+master key and use it straight away, but it enforces the list when one is
+configured. Without the list, `rotate_data_key` must be passed the master key
+to rotate onto: keeping the current one would mean trusting whatever ARN
+`key_storage` holds.
+
+**Scope the application's IAM permissions to the same keys.** Grant the
+credentials the plugin runs under only the KMS actions they need, on the
+specific master key ARN(s) the columns use - never `Resource: "*"`. Use a
+distinct key per environment. This also blocks a key in another AWS
+account: using one requires permission in your own account's policy as
+well as in that key's policy.
 
 At runtime the plugin only decrypts stored data keys, so the application's
 role needs just `kms:Decrypt` on those keys:
@@ -669,15 +699,22 @@ encryption on for a column, rotating data keys) additionally calls
 `kms:DescribeKey`. Run it under a separate, admin-only credential rather than
 granting those actions to the application's runtime role.
 
+Do not add a `kms:ViaService` condition to these policies. That condition
+only matches requests an AWS service makes to KMS on your behalf, and the
+plugin calls KMS directly from the application, so every `Decrypt` would be
+denied.
+
 ### Restrict write access to the metadata schema
 
 `encryption_metadata` records which columns are encrypted, and `key_storage`
 holds each column's KMS-encrypted data key alongside its HMAC key (in the
 clear). Anyone who can **write** those tables can defeat the protection:
 substituting a known HMAC key lets them forge values that pass the
-server-side trigger, and repointing a column at a key they control lets them
-read or replace its data. Whether the column holds only ciphertext is only as
-strong as who can change `key_storage`.
+server-side trigger. Repointing a column at a master key they control is
+refused by `encryption_allowed_master_key_arns`, but they can still delete or
+swap the key material of listed keys and make a column unreadable. Whether the
+column holds only ciphertext is only as strong as who can change
+`key_storage`.
 
 At runtime the plugin only reads the metadata schema, so grant the
 application's database role `SELECT` on it and nothing more. Reserve
@@ -700,4 +737,31 @@ GRANT SELECT ON encrypt.* TO 'app_user'@'%';
 The application's role does still need `SELECT` on `key_storage`, both to
 read key material and because the server-side trigger reads the HMAC key as
 the invoking user.
+
+### Encrypted values are not tied to their row
+
+Each stored value is checked against its column's keys: its HMAC tag and its
+AES-GCM authentication tag must both verify before it is decrypted. Nothing in
+the value identifies the row it belongs to, though. An encrypted value copied
+from one row into another row of the **same column** still verifies, is
+accepted by the server-side trigger, and decrypts normally.
+
+So anyone who can `UPDATE` a table with encrypted columns can move encrypted
+values between its rows without holding any key. For example, they could copy
+another user's encrypted SSN into their own row and then read it through the
+application in plaintext, or overwrite a value with an older one. This
+includes the application's own database role, and so any SQL injection in
+the application. Moving a value into a **different** column does not work:
+each column has its own data key and HMAC key (as `Plugins::Encryption::KeyManagementUtility` sets
+up), so the server-side trigger refuses the write.
+
+To limit the exposure:
+
+- Grant `UPDATE` on tables with encrypted columns only to the roles that
+  need it, and treat that privilege as sensitive.
+- Keep SQL injection out of the application. Binding values, which the plugin
+  already requires for writes to encrypted columns, does most of this.
+- Where a value must provably belong to its row, have the application tie them
+  together itself. For example, write the row's key as part of the value (such
+  as `"#{user_id}:#{ssn}"`) and check it after reading.
 

@@ -167,6 +167,16 @@ To use an existing KMS key instead of creating one, pass its ARN to
 `encryption_allowed_master_key_arns`, or the plugin refuses to read or
 write the column.
 
+:::warning
+`initialize_encryption_for_column` only generates the column's data key and
+records the column in `encryption_metadata`. It does **not** create the
+database-side HMAC-validation trigger. Create that trigger for every
+encrypted column yourself, as described in
+[Enforce encryption in the database](#enforce-encryption-in-the-database).
+Without it, a write that does not go through the plugin stores a plaintext
+value without any error.
+:::
+
 
 ## How to enable
 

@@ -144,9 +144,9 @@ parameters the plugin uses, then create a master key and turn on encryption
 for an existing binary column:
 
 ```ruby
-require 'aws_advanced_ruby_driver_wrapper'
-require 'aws-sdk-kms'
-require 'pg'
+require "aws_advanced_ruby_driver_wrapper"
+require "aws-sdk-kms"
+require "pg"
 
 encryption = AwsAdvancedRubyDriverWrapper::Plugins::Encryption
 

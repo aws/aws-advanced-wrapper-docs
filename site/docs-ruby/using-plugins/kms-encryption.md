@@ -403,15 +403,27 @@ DECLARE
   col_value bytea;
   hmac_key  bytea;
   cache_key text := 'hmac_key.' || TG_TABLE_NAME || '.' || col_name;
+  unchanged boolean;
 BEGIN
+  -- An UPDATE that leaves the encrypted value as it was is not re-checked; see
+  -- "Updates after a key rotation".
+  IF TG_OP = 'UPDATE' THEN
+    EXECUTE format('SELECT ($1).%I IS NOT DISTINCT FROM ($2).%I', col_name, col_name)
+      INTO unchanged USING NEW, OLD;
+    IF unchanged THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+
   EXECUTE format('SELECT ($1).%I', col_name) INTO col_value USING NEW;
   IF col_value IS NULL THEN
     RETURN NEW;
   END IF;
 
-  BEGIN
-    hmac_key := decode(current_setting(cache_key), 'hex');
-  EXCEPTION WHEN OTHERS THEN
+  -- A setting cached by an earlier transaction reads back as '' rather than being
+  -- undefined, so an empty value is treated as not cached.
+  hmac_key := decode(NULLIF(current_setting(cache_key, true), ''), 'hex');
+  IF hmac_key IS NULL THEN
     SELECT ks.hmac_key INTO hmac_key
       FROM encrypt.encryption_metadata em
       JOIN encrypt.key_storage ks ON em.key_id = ks.id
@@ -422,7 +434,7 @@ BEGIN
     END IF;
 
     PERFORM set_config(cache_key, encode(hmac_key, 'hex'), true);
-  END;
+  END IF;
 
   IF length(col_value) < 65
      OR substring(col_value from 1 for 32) <> hmac(substring(col_value from 33), hmac_key, 'sha256') THEN
@@ -432,7 +444,11 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+```
 
+Then create a trigger for every column that you want to encrypt:
+
+```sql
 -- Create the trigger for every column that you want to encrypt.
 CREATE TRIGGER users_ssn_encrypted
 BEFORE INSERT OR UPDATE ON users
@@ -452,7 +468,7 @@ costs more than the rotation delay is worth.
 ### MySQL
 
 MySQL has no built-in HMAC function, so the equivalent builds HMAC-SHA256 out
-of `SHA2()`. Create the two functions and the validation procedure once per
+of `SHA2()`. Create the two functions and the two validation procedures once per
 schema, then add a `BEFORE INSERT` and a `BEFORE UPDATE` trigger per encrypted
 column. Replace `SCHEMA_NAME` with the value of `encryption_metadata_schema`
 (`encrypt` by default). Requires MySQL 5.7+ / MariaDB 10.2+ for `SHA2()`. On
@@ -517,7 +533,7 @@ BEGIN
     RETURN SUBSTRING(data, 1, 32) = hmac_sha256(SUBSTRING(data, 33), hmac_key);
 END$$
 
--- Called from a BEFORE INSERT / BEFORE UPDATE trigger to reject a value that is
+-- Called from a BEFORE INSERT trigger (and by the BEFORE UPDATE procedure) to reject a value that is
 -- not a valid kms_encryption payload. Replace SCHEMA_NAME with encryption_metadata_schema.
 DROP PROCEDURE IF EXISTS validate_encrypted_data_hmac_before_insert$$
 CREATE PROCEDURE validate_encrypted_data_hmac_before_insert(
@@ -548,6 +564,21 @@ BEGIN
     END IF;
 END$$
 
+-- Called from a BEFORE UPDATE trigger. An UPDATE that leaves the value as it was is not
+-- re-checked; see "Updates after a key rotation".
+DROP PROCEDURE IF EXISTS validate_encrypted_data_hmac_before_update$$
+CREATE PROCEDURE validate_encrypted_data_hmac_before_update(
+    IN p_table_name VARCHAR(64),
+    IN p_column_name VARCHAR(64),
+    IN new_value VARBINARY(65535),
+    IN old_value VARBINARY(65535)
+)
+BEGIN
+    IF NOT (new_value <=> old_value) THEN
+        CALL validate_encrypted_data_hmac_before_insert(p_table_name, p_column_name, new_value);
+    END IF;
+END$$
+
 DELIMITER ;
 ```
 
@@ -568,7 +599,7 @@ CREATE TRIGGER users_ssn_hmac_check_update
 BEFORE UPDATE ON users
 FOR EACH ROW
 BEGIN
-    CALL validate_encrypted_data_hmac_before_insert('users', 'ssn', NEW.ssn);
+    CALL validate_encrypted_data_hmac_before_update('users', 'ssn', NEW.ssn, OLD.ssn);
 END$$
 
 -- Repeat the pair for another column, e.g. users.dob.
@@ -583,10 +614,25 @@ CREATE TRIGGER users_dob_hmac_check_update
 BEFORE UPDATE ON users
 FOR EACH ROW
 BEGIN
-    CALL validate_encrypted_data_hmac_before_insert('users', 'dob', NEW.dob);
+    CALL validate_encrypted_data_hmac_before_update('users', 'dob', NEW.dob, OLD.dob);
 END$$
 DELIMITER ;
 ```
+
+### Updates after a key rotation
+
+Both triggers check a value against the column's **current** HMAC key, and
+rotating a column's data key also gives it a new HMAC key. Values written
+before the rotation keep the previous key's HMAC tag, which is still valid
+for them: the plugin reads them with the key they were written with.
+
+So the triggers skip the check when an `UPDATE` leaves the encrypted value
+unchanged. Without that, every update to a row written before the rotation,
+even one that only changes another column, would be rejected until the row's
+encrypted values were re-encrypted. A value that is new to the row - an
+`INSERT`, or an `UPDATE` that changes the encrypted column - is still
+checked, and must carry the current key's tag. The plugin always writes new
+values with the current key, so its writes pass.
 
 
 ## Hardening the deployment

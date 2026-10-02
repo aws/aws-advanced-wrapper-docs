@@ -1,0 +1,65 @@
+name: Docs bug
+description: A broken link, a wrong parameter name, a missing page, or other error in the documentation.
+title: "[Docs bug]: "
+labels: ["documentation", "bug"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Use this for problems with the **documentation** in this repository.
+
+
+        For a crash, runtime problem, or feature request in a **specific
+        wrapper**, open an issue on that wrapper's own repository instead — see
+        the [Wrappers](https://github.com/aws/aws-advanced-wrapper-docs#wrappers)
+        table.
+
+
+        For a **security issue**, do not open a public issue — see
+        [SECURITY.md](https://github.com/aws/aws-advanced-wrapper-docs/blob/main/SECURITY.md).
+  - type: input
+    id: page
+    attributes:
+      label: Page URL or path
+      description: The published page URL (e.g. https://aws.github.io/aws-advanced-wrapper-docs/ruby/overview) or the source file path.
+      placeholder: https://aws.github.io/aws-advanced-wrapper-docs/...
+    validations:
+      required: true
+  - type: dropdown
+    id: wrapper
+    attributes:
+      label: Which wrapper's docs?
+      description: Which wrapper documentation tree does this affect? Choose "Shared / site" for navigation, build, or cross-wrapper content.
+      options:
+        - Ruby
+        - Shared / site
+        - Other / not sure
+    validations:
+      required: false
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type of problem
+      options:
+        - Broken link
+        - Wrong parameter name or value
+        - Missing page or section
+        - Incorrect or outdated information
+        - Typo or formatting
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What is wrong?
+      description: Describe the problem. Quote the incorrect text if helpful.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should it say instead?
+      description: The correct link, parameter name, or content, if you know it.
+    validations:
+      required: false

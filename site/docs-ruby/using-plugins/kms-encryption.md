@@ -508,10 +508,17 @@ key.
 ### PostgreSQL
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- pgcrypto provides hmac(). If it is already installed in a schema other than public,
+-- replace public in public.hmac below with that schema.
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 -- Replace 'encrypt' below if encryption_metadata_schema is set to something else.
-CREATE OR REPLACE FUNCTION enforce_encrypted_column() RETURNS trigger AS $$
+-- A trigger runs with the search_path of the session that fires it. Pinning it to pg_catalog
+-- stops a session from putting its own functions or operators, such as hmac() or <>, ahead of
+-- the built-in ones to get a plaintext value past this check.
+CREATE OR REPLACE FUNCTION enforce_encrypted_column() RETURNS trigger
+SET search_path = pg_catalog, pg_temp
+AS $$
 DECLARE
   col_name  text := TG_ARGV[0];
   col_value bytea;
@@ -551,7 +558,7 @@ BEGIN
   END IF;
 
   IF length(col_value) < 65
-     OR substring(col_value from 1 for 32) <> hmac(substring(col_value from 33), hmac_key, 'sha256') THEN
+     OR substring(col_value from 1 for 32) <> public.hmac(substring(col_value from 33), hmac_key, 'sha256'::text) THEN
     RAISE EXCEPTION 'Column %.% does not carry a valid HMAC tag (plaintext or tampered value)', TG_TABLE_NAME, col_name;
   END IF;
 
@@ -751,9 +758,9 @@ values with the current key, so its writes pass.
 
 ## Hardening the deployment
 
-Two access-control boundaries do most of the work of keeping the encryption
-meaningful: which KMS keys the application can reach, and who can write the
-metadata schema.
+Three access-control boundaries do most of the work of keeping the encryption
+meaningful: which KMS keys the application can reach, who can write the
+metadata schema, and who can change the server-side trigger.
 
 ### Restrict the KMS keys the application can use
 
@@ -849,6 +856,46 @@ GRANT SELECT ON encrypt.* TO 'app_user'@'%';
 The application's role does still need `SELECT` on `key_storage`, both to
 read key material and because the server-side trigger reads the HMAC key as
 the invoking user.
+
+### Keep the application from turning off the trigger
+
+The server-side trigger only protects a column while it stays in place and
+unchanged. Some roles can switch it off, or get around it, without touching the
+metadata schema:
+
+- **The owner of a table** can disable or drop its triggers. On PostgreSQL,
+  `ALTER TABLE users DISABLE TRIGGER users_ssn_encrypted` turns the check off
+  and needs no other privilege.
+- **A role with the `TRIGGER` privilege on a table** can add a trigger of its
+  own. One that runs after the HMAC check can replace the checked value with
+  plaintext. PostgreSQL runs `BEFORE` triggers in name order, and MySQL in
+  creation order unless `FOLLOWS` or `PRECEDES` is given. On MySQL the same
+  privilege also allows `DROP TRIGGER`.
+- **The owner of the trigger function** on PostgreSQL, or **a user with
+  `ALTER ROUTINE` on the validation routines** on MySQL, can replace them with
+  versions that accept any value. On MySQL, the user that creates a routine is
+  given `ALTER ROUTINE` on it automatically.
+- **A superuser**, including the RDS master user (`rds_superuser` on RDS for
+  PostgreSQL), can do all of the above. On PostgreSQL it can also skip triggers
+  for a whole session with `SET session_replication_role = replica`.
+
+So create the encrypted tables, the trigger function or routines, and the
+triggers as an administrative role, and give the application's role only the
+data privileges it needs on those tables. Do not run the application as the
+master user. With ActiveRecord this means running migrations under a different
+role from the application, because the role that runs `CREATE TABLE` owns the
+table it creates.
+
+```sql
+-- PostgreSQL: the administrative role owns the table, and the application role can only use it.
+GRANT SELECT, INSERT, UPDATE, DELETE ON users TO app_role;
+GRANT USAGE ON SEQUENCE users_id_seq TO app_role;
+```
+
+```sql
+-- MySQL: grant data privileges only, not TRIGGER or ALTER ROUTINE.
+GRANT SELECT, INSERT, UPDATE, DELETE ON mydb.users TO 'app_user'@'%';
+```
 
 ### Encrypted values are not tied to their row
 

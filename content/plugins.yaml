@@ -961,6 +961,118 @@ plugins:
           `Plugins::Encryption::KeyManagementUtility` rather than editing the tables
           by hand; a column is only usable once a matching data key exists in
           `key_storage`.
+
+          ### Create the metadata tables
+
+          Create the schema and both tables once, before setting up any encrypted
+          column. The statements below use the default schema name `encrypt`;
+          replace it if `encryption_metadata_schema` is set to something else. On
+          MySQL a schema is a database, so `CREATE SCHEMA` creates a database named
+          `encrypt`.
+
+          #### PostgreSQL
+
+          ```sql
+          CREATE SCHEMA IF NOT EXISTS encrypt;
+
+          CREATE TABLE encrypt.key_storage (
+              id SERIAL PRIMARY KEY,
+              key_id VARCHAR(255) NOT NULL,
+              name VARCHAR(255) NOT NULL,
+              master_key_arn VARCHAR(512) NOT NULL,
+              encrypted_data_key TEXT NOT NULL,
+              hmac_key BYTEA NOT NULL,
+              key_spec VARCHAR(50) DEFAULT 'AES_256',
+              created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+              last_used_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+          );
+
+          CREATE TABLE encrypt.encryption_metadata (
+              table_name VARCHAR(255) NOT NULL,
+              column_name VARCHAR(255) NOT NULL,
+              encryption_algorithm VARCHAR(50) NOT NULL,
+              key_id INTEGER NOT NULL,
+              created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY (table_name, column_name),
+              FOREIGN KEY (key_id) REFERENCES encrypt.key_storage(id)
+          );
+          ```
+
+          #### MySQL
+
+          ```sql
+          CREATE SCHEMA IF NOT EXISTS encrypt;
+
+          CREATE TABLE encrypt.key_storage (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              key_id VARCHAR(255) NOT NULL,
+              name VARCHAR(255) NOT NULL,
+              master_key_arn VARCHAR(512) NOT NULL,
+              encrypted_data_key TEXT NOT NULL,
+              hmac_key VARBINARY(32) NOT NULL,
+              key_spec VARCHAR(50) DEFAULT 'AES_256',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+
+          CREATE TABLE encrypt.encryption_metadata (
+              table_name VARCHAR(255) NOT NULL,
+              column_name VARCHAR(255) NOT NULL,
+              encryption_algorithm VARCHAR(50) NOT NULL,
+              key_id INT NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+              PRIMARY KEY (table_name, column_name),
+              FOREIGN KEY (key_id) REFERENCES encrypt.key_storage(id)
+          );
+          ```
+
+          `encryption_metadata.key_id` references `key_storage.id`, not
+          `key_storage.key_id`. Once the tables exist, create the database-side
+          trigger described in [Enforce encryption in the database](#enforce-encryption-in-the-database),
+          then use `Plugins::Encryption::KeyManagementUtility` to set up each column.
+
+          ### Set up an encrypted column
+
+          `KeyManagementUtility` runs on a plain `pg` or `mysql2` connection that you
+          open and close yourself. Build its configuration from the same `encryption_*`
+          parameters the plugin uses, then create a master key and turn on encryption
+          for an existing binary column:
+
+          ```ruby
+          require "aws_advanced_ruby_driver_wrapper"
+          require "aws-sdk-kms"
+          require "pg"
+
+          encryption = AwsAdvancedRubyDriverWrapper::Plugins::Encryption
+
+          conn = PG.connect(host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com", dbname: "mydb",
+                            user: "admin", password: "...")
+          config = encryption::EncryptionConfig.from_props(encryption_kms_region: "us-east-1")
+          utility = encryption::KeyManagementUtility.new(
+            connection: conn, kms_client: Aws::KMS::Client.new(region: "us-east-1"), config: config
+          )
+
+          master_key_arn = utility.create_master_key("users.ssn encryption")
+          utility.initialize_encryption_for_column("users", "ssn", master_key_arn)
+          conn.close
+          ```
+
+          To use an existing KMS key instead of creating one, pass its ARN to
+          `initialize_encryption_for_column`. Either way, add the ARN to
+          `encryption_allowed_master_key_arns`, or the plugin refuses to read or
+          write the column.
+
+          :::warning
+          `initialize_encryption_for_column` only generates the column's data key and
+          records the column in `encryption_metadata`. It does **not** create the
+          database-side HMAC-validation trigger. Create that trigger for every
+          encrypted column yourself, as described in
+          [Enforce encryption in the database](#enforce-encryption-in-the-database).
+          Without it, a write that does not go through the plugin stores a plaintext
+          value without any error.
+          :::
         - |
           ## Server-side enforcement is required
 

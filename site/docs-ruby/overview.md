@@ -27,7 +27,7 @@ Requires Ruby 3.3 or later.
 
 ```ruby
 # Gemfile
-gem 'aws-advanced-ruby-driver-wrapper', require: 'aws_advanced_ruby_driver_wrapper'
+gem 'aws_advanced_ruby_driver_wrapper'
 gem 'pg'        # or: gem 'mysql2'
 ```
 

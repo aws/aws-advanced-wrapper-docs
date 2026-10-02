@@ -1,0 +1,16 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Bug in a specific wrapper
+    url: https://github.com/aws/aws-advanced-wrapper-docs#wrappers
+    about: >-
+      Crashes, runtime problems, or feature requests for a wrapper itself belong
+      on that wrapper's own repository, not here. This repo contains only the
+      docs. See the Wrappers table to find the right repository.
+  - name: Security issue
+    url: https://aws.amazon.com/security/vulnerability-reporting/
+    about: >-
+      Please do NOT open a public GitHub issue for security concerns. Report
+      vulnerabilities to AWS/Amazon Security. See SECURITY.md.
+  - name: Contributing
+    url: https://github.com/aws/aws-advanced-wrapper-docs/blob/main/CONTRIBUTING.md
+    about: Read the contributing guide before opening a pull request.

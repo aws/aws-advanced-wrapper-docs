@@ -459,11 +459,36 @@ string is in, and are always decrypted to a UTF-8 `String`. A UTF-16 or
 Latin-1 `"grün"` reads back as the UTF-8 `"grün"`. A binary (`ASCII-8BIT`) string is treated as raw bytes
 and reads back as binary. A string that has no UTF-8 form, for example
 because it contains bytes that are invalid in its encoding, is refused with
-`Errors::EncryptionError`.
+`Errors::EncryptionError`. ActiveRecord passes the plugin binary strings
+unless the model says otherwise; see
+[Declare encrypted columns as strings in ActiveRecord](#declare-encrypted-columns-as-strings-in-activerecord).
 
 **SQL** can be in any encoding. The plugin reads a UTF-8 copy of each
 statement to find its encrypted columns, while the driver is sent the SQL
 exactly as your application wrote it.
+
+### Declare encrypted columns as strings in ActiveRecord
+
+An encrypted column is a binary column, so by default ActiveRecord treats
+its attribute as binary. It writes the value as a binary (`ASCII-8BIT`)
+string and reads it back as one, so `"café"` reads back as
+`"caf\xC3\xA9"`. On PostgreSQL, ActiveRecord also runs
+`PG::Connection.unescape_bytea` over the decrypted value, which changes any
+value that contains a backslash: `"a\\b"` reads back as `"ab"`, and
+`"\\x41"` as `"A"`.
+
+Declare each encrypted column as a string attribute on its model:
+
+```ruby
+class User < ApplicationRecord
+  attribute :ssn, :string
+end
+```
+
+ActiveRecord then writes and reads the value as a UTF-8 string, so
+`"café"`, `"a\\b"` and `"\\x41"` all read back exactly as they were
+written. The column itself stays binary; only the attribute's Ruby type
+changes.
 
 ### Known limitations
 
@@ -595,6 +620,14 @@ column. Replace `SCHEMA_NAME` with the value of `encryption_metadata_schema`
 (`encrypt` by default). Requires MySQL 5.7+ / MariaDB 10.2+ for `SHA2()`. On
 Aurora/RDS MySQL, creating the functions may require the cluster parameter
 `log_bin_trust_function_creators` to be set to `1`.
+
+:::note
+The SQL below uses `DELIMITER`, which is a command of the `mysql` command-line
+client rather than SQL. To run it through a driver, a Rails migration, or any
+other tool that sends one statement at a time, leave out the `DELIMITER`
+lines and send each `DROP`, `CREATE FUNCTION`, `CREATE PROCEDURE` and
+`CREATE TRIGGER` statement on its own, without its trailing `$$`.
+:::
 
 ```sql
 DELIMITER $$

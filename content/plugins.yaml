@@ -550,10 +550,17 @@ plugins:
       ### PostgreSQL
 
       ```sql
-      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+      -- pgcrypto provides hmac(). If it is already installed in a schema other than public,
+      -- replace public in public.hmac below with that schema.
+      CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
       -- Replace 'encrypt' below if encryption_metadata_schema is set to something else.
-      CREATE OR REPLACE FUNCTION enforce_encrypted_column() RETURNS trigger AS $$
+      -- A trigger runs with the search_path of the session that fires it. Pinning it to pg_catalog
+      -- stops a session from putting its own functions or operators, such as hmac() or <>, ahead of
+      -- the built-in ones to get a plaintext value past this check.
+      CREATE OR REPLACE FUNCTION enforce_encrypted_column() RETURNS trigger
+      SET search_path = pg_catalog, pg_temp
+      AS $$
       DECLARE
         col_name  text := TG_ARGV[0];
         col_value bytea;
@@ -593,7 +600,7 @@ plugins:
         END IF;
 
         IF length(col_value) < 65
-           OR substring(col_value from 1 for 32) <> hmac(substring(col_value from 33), hmac_key, 'sha256') THEN
+           OR substring(col_value from 1 for 32) <> public.hmac(substring(col_value from 33), hmac_key, 'sha256'::text) THEN
           RAISE EXCEPTION 'Column %.% does not carry a valid HMAC tag (plaintext or tampered value)', TG_TABLE_NAME, col_name;
         END IF;
 
@@ -630,6 +637,14 @@ plugins:
       (`encrypt` by default). Requires MySQL 5.7+ / MariaDB 10.2+ for `SHA2()`. On
       Aurora/RDS MySQL, creating the functions may require the cluster parameter
       `log_bin_trust_function_creators` to be set to `1`.
+
+      :::note
+      The SQL below uses `DELIMITER`, which is a command of the `mysql` command-line
+      client rather than SQL. To run it through a driver, a Rails migration, or any
+      other tool that sends one statement at a time, leave out the `DELIMITER`
+      lines and send each `DROP`, `CREATE FUNCTION`, `CREATE PROCEDURE` and
+      `CREATE TRIGGER` statement on its own, without its trailing `$$`.
+      :::
 
       ```sql
       DELIMITER $$
@@ -792,9 +807,9 @@ plugins:
     hardening: |
       ## Hardening the deployment
 
-      Two access-control boundaries do most of the work of keeping the encryption
-      meaningful: which KMS keys the application can reach, and who can write the
-      metadata schema.
+      Three access-control boundaries do most of the work of keeping the encryption
+      meaningful: which KMS keys the application can reach, who can write the
+      metadata schema, and who can change the server-side trigger.
 
       ### Restrict the KMS keys the application can use
 
@@ -890,6 +905,46 @@ plugins:
       The application's role does still need `SELECT` on `key_storage`, both to
       read key material and because the server-side trigger reads the HMAC key as
       the invoking user.
+
+      ### Keep the application from turning off the trigger
+
+      The server-side trigger only protects a column while it stays in place and
+      unchanged. Some roles can switch it off, or get around it, without touching the
+      metadata schema:
+
+      - **The owner of a table** can disable or drop its triggers. On PostgreSQL,
+        `ALTER TABLE users DISABLE TRIGGER users_ssn_encrypted` turns the check off
+        and needs no other privilege.
+      - **A role with the `TRIGGER` privilege on a table** can add a trigger of its
+        own. One that runs after the HMAC check can replace the checked value with
+        plaintext. PostgreSQL runs `BEFORE` triggers in name order, and MySQL in
+        creation order unless `FOLLOWS` or `PRECEDES` is given. On MySQL the same
+        privilege also allows `DROP TRIGGER`.
+      - **The owner of the trigger function** on PostgreSQL, or **a user with
+        `ALTER ROUTINE` on the validation routines** on MySQL, can replace them with
+        versions that accept any value. On MySQL, the user that creates a routine is
+        given `ALTER ROUTINE` on it automatically.
+      - **A superuser**, including the RDS master user (`rds_superuser` on RDS for
+        PostgreSQL), can do all of the above. On PostgreSQL it can also skip triggers
+        for a whole session with `SET session_replication_role = replica`.
+
+      So create the encrypted tables, the trigger function or routines, and the
+      triggers as an administrative role, and give the application's role only the
+      data privileges it needs on those tables. Do not run the application as the
+      master user. With ActiveRecord this means running migrations under a different
+      role from the application, because the role that runs `CREATE TABLE` owns the
+      table it creates.
+
+      ```sql
+      -- PostgreSQL: the administrative role owns the table, and the application role can only use it.
+      GRANT SELECT, INSERT, UPDATE, DELETE ON users TO app_role;
+      GRANT USAGE ON SEQUENCE users_id_seq TO app_role;
+      ```
+
+      ```sql
+      -- MySQL: grant data privileges only, not TRIGGER or ALTER ROUTINE.
+      GRANT SELECT, INSERT, UPDATE, DELETE ON mydb.users TO 'app_user'@'%';
+      ```
 
       ### Encrypted values are not tied to their row
 
@@ -1313,11 +1368,36 @@ plugins:
           Latin-1 `"grün"` reads back as the UTF-8 `"grün"`. A binary (`ASCII-8BIT`) string is treated as raw bytes
           and reads back as binary. A string that has no UTF-8 form, for example
           because it contains bytes that are invalid in its encoding, is refused with
-          `Errors::EncryptionError`.
+          `Errors::EncryptionError`. ActiveRecord passes the plugin binary strings
+          unless the model says otherwise; see
+          [Declare encrypted columns as strings in ActiveRecord](#declare-encrypted-columns-as-strings-in-activerecord).
 
           **SQL** can be in any encoding. The plugin reads a UTF-8 copy of each
           statement to find its encrypted columns, while the driver is sent the SQL
           exactly as your application wrote it.
+
+          ### Declare encrypted columns as strings in ActiveRecord
+
+          An encrypted column is a binary column, so by default ActiveRecord treats
+          its attribute as binary. It writes the value as a binary (`ASCII-8BIT`)
+          string and reads it back as one, so `"café"` reads back as
+          `"caf\xC3\xA9"`. On PostgreSQL, ActiveRecord also runs
+          `PG::Connection.unescape_bytea` over the decrypted value, which changes any
+          value that contains a backslash: `"a\\b"` reads back as `"ab"`, and
+          `"\\x41"` as `"A"`.
+
+          Declare each encrypted column as a string attribute on its model:
+
+          ```ruby
+          class User < ApplicationRecord
+            attribute :ssn, :string
+          end
+          ```
+
+          ActiveRecord then writes and reads the value as a UTF-8 string, so
+          `"café"`, `"a\\b"` and `"\\x41"` all read back exactly as they were
+          written. The column itself stays binary; only the attribute's Ruby type
+          changes.
 
           ### Known limitations
 

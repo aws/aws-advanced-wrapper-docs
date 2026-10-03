@@ -443,7 +443,7 @@
       },
       "emit": {
         "notes": [
-          "The initial connection plugin is not recommended for a custom endpoint: it is incompatible with the Aurora custom endpoint URL type, so it is left out of this configuration even though it is a default plugin."
+          "The initial connection plugin is left out of this configuration even though it is a default plugin: on a custom endpoint it passes the endpoint through unchanged unless you set `initial_connection_substitute_host` to `any` or `reader`. Add it back with one of those values if you want new connections resolved to a specific member instance."
         ]
       }
     },
@@ -521,6 +521,21 @@
       "emit": {
         "traps": [
           "This is the cluster's read-only endpoint. Writes will fail against it \u2014 point the writing configuration at the endpoint without -ro-."
+        ]
+      }
+    },
+    {
+      "when": {
+        "deployment": [
+          "global"
+        ]
+      },
+      "emit": {
+        "params": {
+          "global_cluster_instance_host_patterns": "?.<cluster-id-1>.<region-1>.rds.amazonaws.com,?.<cluster-id-2>.<region-2>.rds.amazonaws.com"
+        },
+        "notes": [
+          "A global database needs one instance host pattern per region (the ? stands for the instance name), so the wrapper can reach the instances of every member cluster. Without it the connection fails at setup."
         ]
       }
     },
@@ -680,7 +695,7 @@
           "emit": {
             "endpoint": "reader",
             "params": {
-              "failover_mode": "strict-reader"
+              "failover_mode": "strict_reader"
             },
             "links": [
               "rds_reader_endpoint"
@@ -700,7 +715,7 @@
               "writing"
             ],
             "params": {
-              "failover_mode": "strict-writer"
+              "failover_mode": "strict_writer"
             },
             "notes": [
               "Reads stay on the primary by construction, so a replica can never serve a stale row to this code."

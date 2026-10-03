@@ -37,6 +37,16 @@ correctly:
 bundle exec rspec spec/unit
 ```
 
+### Linting
+
+CI also runs RuboCop, so run it before opening a pull request. `-a` applies
+the safe autocorrections:
+
+```bash
+bundle exec rubocop
+bundle exec rubocop -a
+```
+
 ## Testing Overview
 
 The AWS Advanced Ruby Driver Wrapper uses the following tests to verify its correctness and performance:
@@ -69,7 +79,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 conn.exec("SELECT 1")
 ```
 
-For more samples and the plugin guides, see the [`docs` directory](https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/docs) in the repository.
+For the plugin guides, see **Using Plugins** in the left sidebar.
 
 ## Architecture
 

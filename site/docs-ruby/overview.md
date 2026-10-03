@@ -21,7 +21,7 @@ will follow your choice where an equivalent page exists.
 
 ## Getting started
 
-Requires Ruby 3.3 or later.
+Requires Ruby 3.3 or later. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, and `mysql2` 0.5.7 or later.
 
 ### 1. Add the gem
 
@@ -35,7 +35,7 @@ gem 'pg'        # or: gem 'mysql2'
 bundle install
 ```
 
-That single require does everything: it registers the Active Record adapters and defines the connection classes for direct use.
+Bundler requires the gem for you (in a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'`). That single require registers the Active Record adapters and makes the connection classes, error classes, and other public API available for direct use.
 
 ### 2. Point Active Record at your cluster
 
@@ -51,13 +51,13 @@ production:
   password: <password>
 ```
 
-That is the whole change — no application code moves. Failover is the default plugin, so connections made through this adapter already recover when the cluster promotes a new writer. Enable more by adding wrapper properties alongside the Active Record keys:
+That is the whole change — no application code moves. When `wrapper_plugins` is not set, the wrapper loads `failover` and `initial_connection`, so connections made through this adapter already recover when the cluster promotes a new writer. Enable more by adding wrapper properties alongside the Active Record keys. Setting `wrapper_plugins` replaces the default list rather than adding to it, so list the defaults you want to keep:
 
 ```yaml
 production:
   adapter: aws_postgresql
   # ...
-  wrapper_plugins: failover,iam
+  wrapper_plugins: failover,initial_connection,iam
   iam_region: us-east-1
   failover_timeout_sec: 300.0     # seconds
 ```
@@ -92,7 +92,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
 )
 ```
 
-The calls your code already makes on the driver connection keep working, and the plugins act on each one.
+The calls your code already makes on the driver connection keep working, and the plugins act on each one. Like `PG::Connection.new`, `WrapperPgConnection.new` (and its alias `open`) also accepts a block: it yields the connection and closes it when the block returns.
 
 ### Next
 

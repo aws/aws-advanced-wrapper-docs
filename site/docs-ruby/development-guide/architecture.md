@@ -82,6 +82,6 @@ During execution, plugins may utilize the [service container](./service-containe
   - service container
   - loaded plugin classes
 - Multiple wrapper connections opened to the same database server will have separate sets of instances mentioned above.
-- The shared storage, monitor, and event-publisher services (and the host list provider) are reused across connections to the same database.
+- The storage, monitor, and event-publisher services are shared by every connection in the process. Each connection has its own host list provider, but connections to the same cluster (the same `cluster_id`) share one topology monitor and cached topology.
 
 :::

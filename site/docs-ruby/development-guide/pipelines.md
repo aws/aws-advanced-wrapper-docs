@@ -55,7 +55,7 @@ The connect pipeline performs any additional setup or post connection steps requ
 
 The most common usage of the connect pipeline is to fetch extra credentials from external locations.
 
-An example would be the IAM connection plugin. The IAM connection plugin generates an IAM authentication token to be used when establishing a connection. Since authentication is only required when establishing a connection and not required for any subsequent execution, the IAM authentication plugin only needs to implement the connect pipeline.
+An example would be the IAM connection plugin. The IAM connection plugin generates an IAM authentication token to be used when establishing a connection. Since authentication is only required when establishing a connection and not required for any subsequent execution, the IAM authentication plugin only needs to implement the connect pipelines (`connect` and `internal_connect`).
 
 ## Internal Connect Pipeline
 
@@ -76,11 +76,12 @@ Usages for this pipeline include:
 ## Release Resources / Shutdown
 
 The AWS Advanced Ruby Driver Wrapper performs graceful teardown through
-`AwsAdvancedRubyDriverWrapper.release_resources`, invoked automatically by an
-`at_exit` hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`.
-`TERM`/`INT` signal traps simply call `exit`, so the real teardown always runs
-from the `at_exit` hook (acquiring locks or joining threads inside a signal-trap
-context is unsafe in Ruby and can deadlock). `release_resources` shuts down the
-shared `MonitorService`, releases the `EventPublisher`'s background thread, and
-clears the wrapper's caches. It is safe to call more than once, so you may also
+`AwsAdvancedRubyDriverWrapper.shutdown`, invoked automatically by an `at_exit`
+hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`. `TERM`/`INT`
+signal traps simply call `exit`, so the real teardown always runs from the
+`at_exit` hook (acquiring locks or joining threads inside a signal-trap context
+is unsafe in Ruby and can deadlock). `shutdown` stops the Blue/Green status
+providers and then calls `release_resources`, which shuts down the shared
+`MonitorService`, releases the `EventPublisher`'s background thread, and clears
+the wrapper's caches. `shutdown` is safe to call more than once, so you may also
 invoke it directly for a deterministic shutdown.

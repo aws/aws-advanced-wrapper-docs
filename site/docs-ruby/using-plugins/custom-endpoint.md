@@ -67,11 +67,27 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 
 Verify plugin compatibility within your Ruby configuration using the [compatibility guide](../compatibility).
 
+## Prerequisites
+
+:::warning
+The plugin calls the RDS `DescribeDBClusterEndpoints` API to track the custom
+endpoint's members, so add `aws-sdk-rds` to your Gemfile:
+
+```ruby
+gem 'aws-sdk-rds'
+```
+
+The plugin uses the AWS SDK default credential provider chain, so the credentials 
+must be available through the chain (for example environment variables, an instance 
+profile, or an ECS task role). See [AWS Credentials](../aws-credentials).
+:::
+
+
 ## Configuration parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `custom_endpoint_region` | String | Required for IP addresses and custom CNAMEs; otherwise No | parsed from URL | The region of the cluster's custom endpoints. Parsed from the URL when not specified, and required for endpoints that carry no region — IP addresses and custom CNAMEs/domains — because the region cannot be parsed from them.<br/><br/>Example: `us-east-1` |
+| `custom_endpoint_region` | String | No | parsed from URL | The region of the cluster's custom endpoints, used for the RDS API calls that fetch the endpoint's members. Parsed from the custom endpoint hostname when not specified. The plugin only acts on Aurora custom endpoint hostnames (`.cluster-custom-`), so it has no effect for IP addresses or custom domains.<br/><br/>Example: `us-east-1` |
 | `custom_endpoint_info_refresh_rate_sec` | Float | No | `30.0` | How frequently custom endpoint monitors fetch custom endpoint info. *(sec)*<br/><br/>Example: `20.0` |
 | `custom_endpoint_info_refresh_rate_backoff_factor` | Integer | No | `2` | Exponential backoff factor for the custom endpoint monitor when it encounters an RDS throttling exception. The refresh interval increases by this factor on throttling and decreases by it on success.<br/><br/>Example: `5` |
 | `custom_endpoint_info_max_refresh_rate_sec` | Float | No | `300.0` | Maximum time the custom endpoint monitor waits between fetches for custom endpoint info. *(sec)*<br/><br/>Example: `600.0` |

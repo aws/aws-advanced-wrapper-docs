@@ -8,7 +8,7 @@ The `cluster_id` parameter is a critical configuration setting when using the AW
 
 ## What is a cluster?
 
-Understanding what constitutes a cluster is crucial for correctly setting the `cluster_id` parameter. In the context of the AWS Advanced Wrapper family, a **cluster** is a logical grouping of database instances that should share the same topology cache and monitoring services.
+Understanding what constitutes a cluster is crucial for correctly setting the `cluster_id` parameter. In the context of the AWS Advanced Ruby Driver Wrapper, a **cluster** is a logical grouping of database instances that should share the same topology cache and monitoring services.
 
 A cluster represents:
 

@@ -126,7 +126,7 @@ This direct role check avoids relying solely on a reader's potentially stale top
 
 ## How to enable
 
-The `failover` plugin is enabled by default when `wrapper_plugins` is not specified. The `failover` plugin is the enhanced implementation described on this page. To select it explicitly, include `failover` in `wrapper_plugins`.
+When `wrapper_plugins` is not specified, the wrapper loads `failover,initial_connection`, so the `failover` plugin is enabled by default. The `failover` plugin is the enhanced implementation described on this page. To select it explicitly, include `failover` in `wrapper_plugins`. Setting `wrapper_plugins` replaces the default list, so also list `initial_connection` if you want to keep it.
 
 ```{{ wrapper.codeLang }}
 {{ enhanced.wrappers[wrapper_id].connectSnippet }}
@@ -137,7 +137,7 @@ Verify plugin compatibility within your {{ wrapper.label }} configuration using 
 {% set this_code = enhanced.wrappers[wrapper_id].pluginCode %}
 {% set others = (wrapper.pluginGroups.failover or []) | reject('equalto', this_code) | list %}
 :::warning
-{{ ex.exclusivity(plugin_group_labels['failover'], this_code, others) }}
+{{ ex.exclusivity(plugin_group_labels['failover'], this_code, others, 'PluginConflictError' if wrapper_id == 'ruby' else none) }}
 :::
 
 ## Enhanced failover parameters

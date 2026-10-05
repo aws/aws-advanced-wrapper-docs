@@ -93,6 +93,7 @@ wrappers:
 
       When executing a Ruby method, the plugin manager only invokes a plugin whose `subscribed_methods` includes that method (or `'*'`). For example, the `FailoverPlugin` subscribes to `connect` plus the driver dialect's network-bound methods, so it is not triggered by non-network calls.
     initHostProviderKey: "init_host_provider"
+    executeKey: "the qualified driver method name (e.g. `connection.query`, `connection.exec`)"
     notifyConnChangedKey: "notify_connection_changed"
 
     devPrereqs: "Make sure you have Ruby 3.3+ installed, along with your choice of underlying driver gem (`pg` or `mysql2`)."
@@ -114,18 +115,19 @@ wrappers:
       conn.exec("SELECT 1")
       ```
 
-      For more samples and the plugin guides, see the [`docs` directory](https://github.com/aws/aws-advanced-ruby-driver-wrapper/tree/main/docs) in the repository.
+      For the plugin guides, see **Using Plugins** in the left sidebar.
 
-    testResultsPath: "`coverage/index.html`"
+    testResultsPath: "the Gradle console output; the Gradle test report is written to `spec/integration/host/build/reports/tests`, and performance test results are written as CSV files to `spec/integration/container/reports`"
 
     # --- Integration Tests page registry -------------------------------------
     showExistingClusterNote: false
+    itExtraPrereqs: "A JDK to run Gradle (CI uses [Amazon Corretto 8](https://aws.amazon.com/corretto/))."
     itEnvVars: |
       | Environment Variable Name | Required | Description                                                                                                | Example Value                                 |
       |---------------------------|----------|------------------------------------------------------------------------------------------------------------|-----------------------------------------------|
       | `DB_USERNAME`             | Yes      | The username to access the database.                                                                       | `admin`                                       |
       | `DB_PASSWORD`             | Yes      | The database cluster password.                                                                             | `password`                                    |
-      | `DB_DATABASE_NAME`        | No       | Name of the database that will be used by the tests. The default database name is test.                    | `test_db_name`                                |
+      | `DB_DATABASE_NAME`        | No       | Name of the database that will be used by the tests. The default database name is `test_database`.        | `test_db_name`                                |
       | `RDS_DB_NAME`             | Yes      | The database identifier for your Aurora or RDS cluster. Must be a unique value to avoid conflicts.          | `db-identifier`                               |
       | `RDS_DB_DOMAIN`           | If running against an existing database, yes; otherwise, no.       | The existing database connection suffix. Use this variable to run against an existing database.            | `xyz.us-east-1.rds.amazonaws.com`             |
       | `IAM_USER`                | No       | User within the database that is identified for AWS IAM Authentication.                                    | `example_user_name`                           |
@@ -135,7 +137,8 @@ wrappers:
       | `REUSE_RDS_DB`            | Yes      | Set to true if you would like to use an existing cluster for your tests.                                   | `false`                                       |
       | `RDS_DB_REGION`           | Yes      | The database region.                                                                                       | `us-east-1`                                   |
       | `FILTER`                  | No       | Filter tests to a specific file or `file:line`. When unset, runs all tests in `spec/integration/container`.| `spec/integration/container/failover_spec.rb` |
-      | `DEBUG_ENV`               | No       | The debugging environment; values are `VSCODE` (default) or `TERMINAL`.                                    | `VSCODE`                                      |
+      | `KMS_KEY_ID`              | No       | KMS master key identifier (id, ARN, or alias) used by the KMS encryption tests. Required only for the encryption suite; those specs skip themselves when it is unset. See [Running the KMS encryption tests](#running-the-kms-encryption-tests). | `arn:aws:kms:us-east-1:123456789012:key/abcd` |
+      | `DEBUG_ENV`               | No       | The debugging environment used by the `debug-*` tasks; values are `VSCODE` (default) or `TERMINAL`. See [Debugging the integration tests](#debugging-the-integration-tests). | `VSCODE`                                      |
     itTasks: |
       - `test-docker`: run all standard (local Docker database) tests
       - `test-aurora`: run all Aurora tests
@@ -143,6 +146,7 @@ wrappers:
       - `test-mysql-aurora`: run the MySQL Aurora tests
       - `test-multi-az`: run the RDS Multi-AZ cluster tests
       - `test-gdb-pg` / `test-gdb-mysql`: run the Global Database tests
+      - `test-encryption`, `test-pg-encryption`, `test-mysql-encryption`: run the KMS encryption tests (see [Running the KMS encryption tests](#running-the-kms-encryption-tests))
       - `debug-aurora`, `debug-docker`, `debug-pg-aurora`, `debug-mysql-aurora`, `debug-all-environments`: the corresponding debug tasks
     itRunExample: |
       For example, to run the Aurora integration tests:
@@ -157,6 +161,7 @@ wrappers:
 
       ```bash
       FILTER=spec/integration/container/failover_spec.rb ./gradlew test-aurora
+      FILTER=spec/integration/container/failover_spec.rb:74 ./gradlew test-aurora
       ```
 
     diagram:
@@ -211,7 +216,7 @@ wrappers:
       Plugins are ordered by a fixed weight (lower runs first / outermost). The
       built-in weights are: Blue/Green `200`, Custom Endpoint `250`, Initial
       Connection Strategy `300`, Failover `400`, GDB Failover `500`, IAM `1800`,
-      Secrets Manager `1900`. `load_plugins` reads the `wrapper_plugins` list,
+      Secrets Manager `1900`, KMS Encryption `2050`. `load_plugins` reads the `wrapper_plugins` list,
       sorts by weight, instantiates each with `(service_container, props)`, and
       **always appends `DefaultPlugin` last** — it is the pipeline terminus that
       actually opens the underlying driver connection.
@@ -250,7 +255,8 @@ wrappers:
         offers: |
           - `hosts` / `all_hosts` — allowed and full host lists.
           - `host_list_provider` — the active provider.
-          - `select_host(hosts, role, props)` and `register_host_selector(name, selector)` — strategy-based selection.
+          - `select_host(hosts, role, strategy, props = nil)` — pick a host by role and host-selection strategy name.
+          - `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Register the name in lowercase: `select_host` lowercases the requested strategy before looking it up.
         whenToUse: |
           Use it to read topology, register a custom host-selection strategy, or pick a
           host by role (writer/reader) and strategy.
@@ -272,15 +278,15 @@ wrappers:
         global: false
         api: "`service_container.session_state_service`"
         summary: |
-          Tracks per-connection session state (transaction status, autocommit) so it can
-          be preserved across a connection switch.
+          Tracks per-connection session state (transaction status, autocommit).
         offers: |
           - `in_transaction?` / `autocommit?` — current session flags.
-          - `update_transaction_state(method_name, args, autocommit_before)` — fold a method call into the tracked state.
-          - `begin` / `complete` / `reset` — bracket a connection switch.
+          - `update_transaction_state(method_name, args, autocommit_before, dialect, connection, succeeded: true)` — fold a method call into the tracked state.
+          - `reset` — clear the tracked state, for example after the connection is replaced.
         whenToUse: |
-          Use it when a plugin swaps connections and must carry session state (e.g.
-          autocommit, open transaction) onto the new connection.
+          Use it when a plugin needs to know whether the connection is inside a
+          transaction or in autocommit mode, for example to decide whether a failed
+          call can be retried transparently.
       - name: "Storage Service"
         short: "Storage Service"
         global: true
@@ -381,13 +387,14 @@ wrapperOnly:
       ## Release Resources / Shutdown
 
       The AWS Advanced Ruby Driver Wrapper performs graceful teardown through
-      `AwsAdvancedRubyDriverWrapper.release_resources`, invoked automatically by an
-      `at_exit` hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`.
-      `TERM`/`INT` signal traps simply call `exit`, so the real teardown always runs
-      from the `at_exit` hook (acquiring locks or joining threads inside a signal-trap
-      context is unsafe in Ruby and can deadlock). `release_resources` shuts down the
-      shared `MonitorService`, releases the `EventPublisher`'s background thread, and
-      clears the wrapper's caches. It is safe to call more than once, so you may also
+      `AwsAdvancedRubyDriverWrapper.shutdown`, invoked automatically by an `at_exit`
+      hook installed in `lib/aws_advanced_ruby_driver_wrapper.rb`. `TERM`/`INT`
+      signal traps simply call `exit`, so the real teardown always runs from the
+      `at_exit` hook (acquiring locks or joining threads inside a signal-trap context
+      is unsafe in Ruby and can deadlock). `shutdown` stops the Blue/Green status
+      providers and then calls `release_resources`, which shuts down the shared
+      `MonitorService`, releases the `EventPublisher`'s background thread, and clears
+      the wrapper's caches. `shutdown` is safe to call more than once, so you may also
       invoke it directly for a deterministic shutdown.
 
   loadable-plugins:
@@ -395,9 +402,11 @@ wrapperOnly:
       ### Creating a Custom Plugin
 
       A plugin is a plain object constructed with `(service_container, props)`. It
-      defines a `subscribed_methods` set and implements any of `connect`,
-      `internal_connect`, and `execute`. Reach shared capabilities through the
-      service container — for example `service_container.host_service.hosts`,
+      defines a `subscribed_methods` set and implements the pipeline method for
+      every name it subscribes to: `connect` and `internal_connect` for the connect
+      pipelines, and `execute` for every driver method. There is no base class
+      providing pass-through defaults, so a plugin subscribed to `'*'` must implement
+      all three. Reach shared capabilities through the service container — for example `service_container.host_service.hosts`,
       `service_container.dialect_service.db_dialect`, or
       `service_container.connection_service.current_connection`.
 
@@ -412,7 +421,17 @@ wrapperOnly:
 
         def subscribed_methods = SUBSCRIBED
 
-        def execute(ruby_method, next_plugin, *args, **kwargs, &block)
+        def connect(host_info, driver_props, is_initial_connection, next_plugin)
+          next_plugin.call
+        end
+
+        def internal_connect(host_info, driver_props, wrapper_props, is_initial_connection, next_plugin)
+          next_plugin.call
+        end
+
+        # method_name is the qualified driver method being called, e.g.
+        # "connection.query", "connection.exec", or "result.each".
+        def execute(method_name, next_plugin, *args, **kwargs, &block)
           # ... run code before/after ...
           next_plugin.call
         end
@@ -421,12 +440,15 @@ wrapperOnly:
 
       ### Register the Custom Plugin
 
-      Register the plugin code, factory class, and (optionally) a weight, then
-      include the code in the `wrapper_plugins` connection parameter:
+      Register the plugin code, the plugin class, and (optionally) a weight, then
+      include the code in the `wrapper_plugins` connection parameter. The plugin
+      manager instantiates the class with `(service_container, props)` for each
+      connection. Without a weight, the plugin runs immediately after the plugin
+      listed before it in `wrapper_plugins`.
 
       ```ruby
       AwsAdvancedRubyDriverWrapper::Services::PluginManager.register_plugin(
-        "my_plugin", MyPluginFactory, weight: 1000)
+        "my_plugin", MyPlugin, weight: 1000)
       ```
 
   development-guide:
@@ -456,6 +478,16 @@ wrapperOnly:
       bundle exec rspec spec/unit
       ```
 
+      ### Linting
+
+      CI also runs RuboCop, so run it before opening a pull request. `-a` applies
+      the safe autocorrections:
+
+      ```bash
+      bundle exec rubocop
+      bundle exec rubocop -a
+      ```
+
   integration-tests:
     ruby: |
       ### Unit vs integration tests
@@ -464,3 +496,95 @@ wrapperOnly:
       The integration tests live under `spec/integration` and are orchestrated by
       Gradle in Docker against a real (or reused) Aurora cluster, using the
       standardized env-vars and tasks above.
+
+      ### Managing environment variables
+
+      Gradle reads the variables from your shell. One way to manage them is to keep
+      them in a `.env` file at the repository root and load it on demand:
+
+      1. Define your environment variables in a `.env` file in the repository root.
+      2. Add this helper function to your `~/.zshrc`:
+         ```bash
+         loadenv() { set -a; source "${1:-.env}"; set +a; }
+         ```
+      3. Reload your shell configuration: `source ~/.zshrc`.
+      4. Run `loadenv` from the repository root to export the variables into your shell.
+
+      After editing `.env`, run `loadenv` again.
+
+      ### Running the KMS encryption tests
+
+      The KMS encryption specs (`spec/integration/container/kms_encryption_*_spec.rb`)
+      run in a dedicated encryption-only environment rather than alongside the normal
+      suite. The `test-encryption`, `test-pg-encryption`, and `test-mysql-encryption`
+      tasks set `test-encryption-only=true`, which reaches the test container as
+      `RUN_ENCRYPTION_ONLY` and selects only the KMS encryption specs; every other task
+      excludes them.
+
+      The specs need a KMS master key in `KMS_KEY_ID` and skip themselves when it is
+      unset. The AWS credentials must allow `kms:GenerateDataKey` and `kms:Decrypt`,
+      plus `kms:CreateKey`, `kms:CreateAlias`, and `kms:DescribeKey` to exercise
+      `KeyManagementUtility.create_master_key`.
+
+      ```bash
+      KMS_KEY_ID=arn:aws:kms:us-east-1:123456789012:key/abcd ./gradlew test-pg-encryption
+      KMS_KEY_ID=arn:aws:kms:us-east-1:123456789012:key/abcd ./gradlew test-mysql-encryption
+      ```
+
+      ### Debugging the integration tests
+
+      The `debug-*` tasks start the specs under the
+      [`rdbg`](https://github.com/ruby/debug) debugger inside the test container,
+      listening on port `5005`. Set `DEBUG_ENV` to choose how you attach.
+
+      #### VS Code (`DEBUG_ENV=VSCODE`, the default)
+
+      1. Install the [VSCode rdbg Ruby Debugger](https://marketplace.visualstudio.com/items?itemName=KoichiSasada.vscode-rdbg) extension.
+      2. Add an "Attach to Docker rdbg" configuration to `.vscode/launch.json`. The
+         repository is mounted at `/app` inside the container, so map that path to your
+         local clone:
+         ```json
+         {
+           "version": "0.2.0",
+           "configurations": [
+             {
+               "type": "rdbg",
+               "name": "Attach to Docker rdbg",
+               "request": "attach",
+               "debugPort": "localhost:5005",
+               "localfs": false,
+               "localfsMap": "/app:<path-to-your-clone>"
+             }
+           ]
+         }
+         ```
+      3. Set breakpoints in your spec or lib files.
+      4. Run a debug task, for example `./gradlew debug-aurora`.
+      5. Wait for `Debug server listening on 0.0.0.0:5005` in the console.
+      6. In VS Code, open **Run and Debug**, select **Attach to Docker rdbg**, and start
+         it. Execution pauses at your breakpoints.
+
+      #### Terminal (`DEBUG_ENV=TERMINAL`)
+
+      1. Run a debug task, for example `./gradlew debug-aurora`.
+      2. Wait for `Debug server listening on 0.0.0.0:5005` in the console.
+      3. From a separate terminal, attach:
+         ```bash
+         rdbg --attach localhost:5005
+         ```
+      4. Set breakpoints from the debugger prompt:
+         ```
+         break spec/integration/container/failover_spec.rb:74
+         continue
+         ```
+
+      You can also add `debugger` statements directly in spec or lib files to pause
+      execution at a specific point.
+
+      #### Why RubyMine debugging is not supported
+
+      RubyMine's "Ruby Remote Debug" configuration uses the `ruby-debug-ide`/`debase`
+      protocol, which only supports Ruby 3.1 and earlier, so it cannot attach to this
+      project's Ruby 3.3+ test container. RubyMine does support the `debug` gem for
+      processes it starts itself, but it has no run configuration for attaching to an
+      external `rdbg` server running in a Docker container.

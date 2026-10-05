@@ -125,7 +125,7 @@ This direct role check avoids relying solely on a reader's potentially stale top
 
 ## How to enable
 
-The `failover` plugin is enabled by default when `wrapper_plugins` is not specified. The `failover` plugin is the enhanced implementation described on this page. To select it explicitly, include `failover` in `wrapper_plugins`.
+When `wrapper_plugins` is not specified, the wrapper loads `failover,initial_connection`, so the `failover` plugin is enabled by default. The `failover` plugin is the enhanced implementation described on this page. To select it explicitly, include `failover` in `wrapper_plugins`. Setting `wrapper_plugins` replaces the default list, so also list `initial_connection` if you want to keep it.
 
 ```ruby
 require 'aws_advanced_ruby_driver_wrapper/postgresql'
@@ -144,7 +144,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 Verify plugin compatibility within your Ruby configuration using the [compatibility guide](./compatibility).
 
 :::warning
-Only one failover plugin may be enabled per connection. Do not use `failover` together with the other `gdb_failover` plugin at the same time for the same connection.
+Only one failover plugin may be enabled per connection. Do not use `failover` together with the other `gdb_failover` plugin at the same time for the same connection. Configuring more than one raises a `PluginConflictError` at connection initialization.
 :::
 
 ## Enhanced failover parameters
@@ -182,8 +182,9 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   user: "<username>",
   password: "<password>",
   wrapper_plugins: "failover",
-  topology_monitoring_connect_timeout: 10,
-  topology_monitoring_socket_timeout: 10
+  # The prefix is stripped and the setting is passed to the underlying driver, so use
+  # an option the driver accepts (e.g. pg: keepalives_idle; mysql2: read_timeout).
+  topology_monitoring_connect_timeout: 10
 )
 
 ```

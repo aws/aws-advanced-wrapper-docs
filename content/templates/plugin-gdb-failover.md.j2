@@ -71,7 +71,7 @@ The plugin is not enabled by default. Add the plugin code `{{ plugin.code }}` to
 {% set group = plugin.pluginGroup or 'failover' %}
 {% set others = (wrapper.pluginGroups[group] or []) | reject('equalto', plugin.code) | list %}
 :::warning
-{{ ex.exclusivity(plugin_group_labels[group], plugin.code, others) }}
+{{ ex.exclusivity(plugin_group_labels[group], plugin.code, others, 'PluginConflictError' if wrapper_id == 'ruby' else none) }}
 :::
 
 Verify plugin compatibility within your {{ wrapper.label }} configuration using the [compatibility guide]({{ wrapper.compatibilityGuide }}).

@@ -18,9 +18,8 @@ at random from the hosts that match the requested role and are currently marked 
 | `random` | Selects at random from the available hosts matching the requested role. | none |
 
 It is also the default, so leaving the strategy properties unset gives you random
-selection. Naming a strategy that is not registered raises
-`Unsupported host selection strategy: '<name>'` rather than silently falling back, so a
-typo fails fast.
+selection.
+:::
 
 ## Where it applies
 
@@ -61,10 +60,11 @@ production:
   failover_reader_host_selector_strategy: least_lag
 ```
 
-Two constraints are worth knowing. A selector is shared by every connection in the process,
-so `select_host` must be safe to call from multiple threads. And a built-in name cannot be
-replaced — registering `random` raises
-`Cannot override default host selection strategy: 'random'`.
+Three constraints are worth knowing. A selector is shared by every connection in the process,
+so `select_host` must be safe to call from multiple threads. Register the name in lowercase:
+the wrapper lowercases the configured strategy name before looking it up. And a built-in name 
+cannot be replaced — registering `random` raises `Cannot override default host selection 
+strategy: 'random'`.
 
 :::note
 Filtering to available hosts is the selector's own responsibility. The built-in `random`

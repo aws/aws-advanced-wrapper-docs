@@ -131,7 +131,7 @@ plugins:
           ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
       - concept: iamExpiration
         type: integer
-        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. IAM database authentication tokens have a lifetime of 15 minutes (900 seconds), so this is capped at a maximum of `870.0` — the default — which keeps a cached token strictly below its validity window (leaving the recommended 30-second safety margin) so it is never used after it expires. A value greater than `870.0`, or `0` or less, is rejected."
+        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected."
         spellings:
           ruby: { name: iam_expiration_sec, type: float, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
       - concept: iamTokenProperty
@@ -142,7 +142,7 @@ plugins:
       - concept: awsCredentialsProvider
         type: object
         availability: { ruby: true }
-        description: "A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
+        description: "A custom AWS credentials provider instance. One property is read by the IAM authentication, Secrets Manager and KMS encryption plugins, so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
         spellings:
           ruby: { name: aws_credentials_provider, required: "No", defaultNote: "SDK default chain", example: "Aws::AssumeRoleCredentials.new(...)" }
     globalDatabases: |
@@ -265,10 +265,16 @@ plugins:
         - |
           ## Token caching
 
-          The plugin caches generated tokens keyed by `region:host:port:user`. A
-          cached token is reused until it expires (controlled by `iam_expiration_sec`).
-          If a login error occurs with a cached token, the plugin automatically
-          fetches a fresh token and retries the connection once.
+          The plugin caches generated tokens keyed by region, host, port, user, and the
+          identity of the AWS credentials that signed the token, so connections using
+          different credentials never share a token, and a credentials provider that
+          refreshes to a new access key gets a new token. When the credentials provider
+          resolves to no credentials, the token is not cached.
+
+          A cached token is reused until 60 seconds before the expiry signed into it
+          (`iam_expiration_sec` applies only when that expiry cannot be read). If a
+          login error occurs with a cached token, the plugin automatically fetches a
+          fresh token and retries the connection once.
 
           ## Related
 
@@ -327,9 +333,9 @@ plugins:
           ruby: { name: secret_endpoint,        required: "No", defaultNote: "none", example: "http://localhost:1234" }
       - concept: secretExpiration
         type: integer
-        description: "Time in seconds that secrets are cached before being re-fetched. When the credentials have a bounded lifetime (for example a rotation schedule), keep this comfortably below that lifetime — roughly 30 seconds less — so a rotated secret is picked up before the cached copy goes stale. The minimum accepted value is `300.0`."
+        description: "Time in seconds that secrets are cached before being re-fetched. When the credentials have a bounded lifetime (for example a rotation schedule), keep this comfortably below that lifetime — roughly 30 seconds less — so a rotated secret is picked up before the cached copy goes stale. Values outside `300.0`–`1140.0` are clamped into that range, with a warning logged."
         spellings:
-          ruby: { name: secret_expiration_sec,           type: float, required: "No", default: "870.0", unit: s, example: "600.0 (minimum 300.0)" }
+          ruby: { name: secret_expiration_sec,           type: float, required: "No", default: "870.0", unit: s, example: "600.0 (300.0 to 1140.0)" }
       - concept: secretUsernameKey
         type: string
         description: "The key in the JSON secret that contains the username for the database connection."
@@ -343,7 +349,7 @@ plugins:
       - concept: awsCredentialsProvider
         type: object
         availability: { ruby: true }
-        description: "A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
+        description: "A custom AWS credentials provider instance. One property is read by the IAM authentication, Secrets Manager and KMS encryption plugins, so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
         spellings:
           ruby: { name: aws_credentials_provider, required: "No", defaultNote: "SDK default chain", example: "Aws::AssumeRoleCredentials.new(...)" }
       - concept: secretRetryTimeout
@@ -383,6 +389,15 @@ plugins:
           See [AWS Credentials](../aws-credentials) for which credential sources the SDK
           refreshes automatically and which it does not.
         - |
+          ## Secret caching
+
+          Retrieved secrets are cached and shared by every connection in the process that
+          reads the same secret the same way: the cache key combines `secret_id`, the
+          region, `secret_endpoint`, and the identity of the AWS credentials used. Connections
+          that differ in any of these do not share a cached secret or an in-flight fetch.
+          When the credentials provider resolves to no credentials, the secret is fetched
+          on every connection and not cached.
+
           ## Secret rotation
 
           AWS Secrets Manager does not require credential rotation, and the wrapper does
@@ -395,7 +410,9 @@ plugins:
 
           - Retrieved credentials are cached for `secret_expiration_sec` (`870.0` seconds by
             default) and then re-fetched, so a rotated secret is picked up on its own once
-            the cache entry expires.
+            the cache entry expires. The first connection after expiry still uses the
+            cached credentials while the plugin re-fetches the secret in the background,
+            and a cached secret is removed for good 20 minutes after it was fetched.
           - If a connection fails to authenticate with the cached credentials, the plugin
             forces an immediate re-fetch and retries once. This happens regardless of
             `secret_rotation_retry_timeout_sec` and covers the common case where the
@@ -456,9 +473,9 @@ plugins:
     parameters:
       - concept: kmsRegion
         type: string
-        description: "AWS region for KMS encryption operations."
+        description: "AWS region for KMS encryption operations. When unset, the `AWS_REGION` and then the `AWS_DEFAULT_REGION` environment variable is used; if none of the three is set, the connection is rejected."
         spellings:
-          ruby: { name: encryption_kms_region, required: "Yes", defaultNote: "AWS_REGION env var", example: "us-east-1" }
+          ruby: { name: encryption_kms_region, required: "Yes, unless AWS_REGION or AWS_DEFAULT_REGION is set", defaultNote: "AWS_REGION, then AWS_DEFAULT_REGION env var", example: "us-east-1" }
       - concept: kmsEndpoint
         type: string
         availability: { ruby: true }
@@ -478,7 +495,7 @@ plugins:
           ruby: { name: encryption_metadata_schema, required: "No", default: "encrypt", example: "app_encrypt" }
       - concept: metadataCacheEnabled
         type: boolean
-        description: "Cache the encryption metadata in memory. Leave enabled in production; when disabled, a short-lived metadata connection is opened for every statement that touches an encrypted column."
+        description: "Cache the encryption metadata in memory. Leave enabled in production; when disabled, a short-lived metadata connection is opened for every statement that touches an encrypted column. If you need fresher metadata, lower `encryption_metadata_cache_refresh_interval_sec` rather than disabling the cache."
         spellings:
           ruby: { name: encryption_metadata_cache_enabled, required: "No", default: "true", example: "true" }
       - concept: metadataCacheExpiration
@@ -488,12 +505,12 @@ plugins:
           ruby: { name: encryption_metadata_cache_expiration_sec, type: float, required: "No", default: "3600.0", unit: s, example: "600.0" }
       - concept: metadataCacheRefresh
         type: integer
-        description: "How often the encryption metadata is refreshed in the background."
+        description: "How often the encryption metadata is refreshed in the background. Set to `0` to disable background refresh."
         spellings:
           ruby: { name: encryption_metadata_cache_refresh_interval_sec, type: float, required: "No", default: "300.0", unit: s, example: "60.0" }
       - concept: dataKeyCacheEnabled
         type: boolean
-        description: "Cache decrypted data keys in memory. Leave enabled in production; when disabled, a KMS `Decrypt` call is made for every statement that touches an encrypted column."
+        description: "Cache decrypted data keys in memory. Leave enabled in production; when disabled, a KMS `Decrypt` call is made for every statement that touches an encrypted column, which adds latency and cost and can hit KMS request-rate limits. Disabling it does shorten how long a plaintext data key stays in memory, so treat it as a deliberate trade-off between throughput and key exposure."
         spellings:
           ruby: { name: encryption_data_key_cache_enabled, required: "No", default: "true", example: "true" }
       - concept: dataKeyCacheMaxSize
@@ -524,7 +541,7 @@ plugins:
       - concept: awsCredentialsProvider
         type: object
         availability: { ruby: true }
-        description: "A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager and KMS encryption — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
+        description: "A custom AWS credentials provider instance. One property is read by the IAM authentication, Secrets Manager and KMS encryption plugins, so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain."
         spellings:
           ruby: { name: aws_credentials_provider, required: "No", defaultNote: "SDK default chain", example: "Aws::AssumeRoleCredentials.new(...)" }
       - concept: returnUnverified
@@ -992,7 +1009,7 @@ plugins:
           which bind parameters belong to encrypted columns. Add it to your Gemfile:
 
           ```ruby
-          gem 'pg_query'
+          gem 'pg_query', '>= 5.1'
           ```
 
           If `pg_query` is missing, connections with the plugin enabled fail with a
@@ -1462,9 +1479,9 @@ plugins:
     parameters:
       - concept: region
         type: string
-        description: "The region of the cluster's custom endpoints. Parsed from the URL when not specified, and required for endpoints that carry no region — IP addresses and custom CNAMEs/domains — because the region cannot be parsed from them."
+        description: "The region of the cluster's custom endpoints, used for the RDS API calls that fetch the endpoint's members. Parsed from the custom endpoint hostname when not specified. The plugin only acts on Aurora custom endpoint hostnames (`.cluster-custom-`), so it has no effect for IP addresses or custom domains."
         spellings:
-          ruby: { name: custom_endpoint_region, required: "Required for IP addresses and custom CNAMEs; otherwise No", defaultNote: "parsed from URL", example: "us-east-1" }
+          ruby: { name: custom_endpoint_region, required: "No", defaultNote: "parsed from URL", example: "us-east-1" }
       - concept: refreshRate
         type: integer
         description: "How frequently custom endpoint monitors fetch custom endpoint info."
@@ -1495,6 +1512,25 @@ plugins:
         description: "Maximum time the plugin waits for custom endpoint info to be made available by the monitor."
         spellings:
           ruby: { name: wait_for_custom_endpoint_info_timeout_sec, type: float, required: "No", default: "5.0", unit: s, example: "7.0" }
+    prereqCount:
+      ruby: 1
+    wrapperOnly:
+      ruby:
+        - |
+          ## Prerequisites
+
+          :::warning
+          The plugin calls the RDS `DescribeDBClusterEndpoints` API to track the custom
+          endpoint's members, so add `aws-sdk-rds` to your Gemfile:
+
+          ```ruby
+          gem 'aws-sdk-rds'
+          ```
+
+          The plugin uses the AWS SDK default credential provider chain, so the credentials 
+          must be available through the chain (for example environment variables, an instance 
+          profile, or an ECS task role). See [AWS Credentials](../aws-credentials).
+          :::
 
   # =========================================================================
   # Global Database (GDB) Failover Plugin
@@ -1538,7 +1574,7 @@ plugins:
       - concept: inHomeMode
         type: string
         description:
-          ruby: "Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`. When unset, the mode is derived from the initial connection endpoint: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`."
+          ruby: "Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`. When unset, the mode is derived from the initial connection endpoint: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`. This plugin does not read `failover_mode`; use this parameter and `out_of_home_failover_mode` instead."
         spellings:
           ruby: { name: in_home_failover_mode,  required: "No", defaultNote: "depends on URL", example: "strict_writer" }
       - concept: outHomeMode
@@ -1554,7 +1590,7 @@ plugins:
           ruby: { name: global_cluster_instance_host_patterns, required: "Yes for Global Databases; otherwise No", defaultNote: "none", example: "?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com" }
       - concept: accessibleRegions
         type: string
-        description: "Comma-separated list of AWS regions the application can reach. When set, failover and topology monitoring only consider nodes in these regions. If the home region is also set, it must be included."
+        description: "Comma-separated list of AWS regions the application can reach. When set, failover only considers nodes in these regions as candidates; topology monitoring still tracks every region. If the home region is also set, it must be included."
         spellings:
           ruby: { name: accessible_regions,   required: "No", defaultNote: "all regions", example: "us-east-1,us-west-1" }
       - concept: failoverTimeout
@@ -1572,6 +1608,26 @@ plugins:
         description: "Strategy used to select a reader node during failover. See [host selection strategies](../host-selection-strategies) for the available values."
         spellings:
           ruby: { name: failover_reader_host_selector_strategy, required: "No", default: "random", example: "random" }
+      - concept: topologyHighRefreshRate
+        type: integer
+        description: "Interval between topology updates during the high-rate period after a new writer is detected."
+        spellings:
+          ruby: { name: cluster_topology_high_refresh_rate_sec, type: float, required: "No", default: "0.1", unit: s, example: "0.1" }
+      - concept: maxInstanceMonitors
+        type: integer
+        description: "Maximum number of per-instance topology monitors run in parallel during a topology update. When the cluster has more instances than this, only the first that many are monitored concurrently."
+        spellings:
+          ruby: { name: cluster_topology_max_instance_monitors, required: "No", default: "16", example: "16" }
+      - concept: clusterId
+        type: string
+        description: "Unique identifier for a cluster. Connections with the same identifier share one topology monitor and cache; different clusters must use different identifiers. See [Cluster ID](../cluster-id)."
+        spellings:
+          ruby: { name: cluster_id, required: "Required when one application uses multiple clusters; otherwise No", default: "1", example: "my-global-db" }
+      - concept: enableConnectFailover
+        type: boolean
+        description: "Enables cluster-aware failover when the initial connection fails because of a network exception. The initial connection may be redirected to another instance."
+        spellings:
+          ruby: { name: enable_connect_failover, required: "No", default: "false", example: "true" }
     configExamples:
       # Ported from the two most instructive scenarios: a writer connection
       # and a home-region reader. Together they cover both host roles and the two
@@ -1660,9 +1716,10 @@ plugins:
 
       This plugin is part of the default plugin list as of v1.0.0: it resolves a cluster
       endpoint to a specific instance and distributes new connections across the
-      cluster's instances. It does not apply to deployments it is incompatible with
-      (for example an Aurora custom endpoint) or where there is no cluster endpoint
-      to resolve (for example behind an RDS Proxy), and should be left out there.
+      cluster's instances. On an Aurora custom endpoint it passes the endpoint through
+      unchanged unless `initial_connection_substitute_host` is set to `any` or `reader`.
+      It does not apply where there is no cluster endpoint to resolve (for example
+      behind an RDS Proxy), and should be left out there.
     code:
       ruby: initial_connection
     availableSince:
@@ -1712,13 +1769,13 @@ plugins:
           ruby: { name: initial_connection_inactive_substitute_host,   required: "No", defaultNote: "passthrough", example: "writer" }
       - concept: inactiveVerifyRole
         type: string
-        description: "Whether a connection opened with an inactive cluster writer endpoint should be verified to be a writer. Applicable to Aurora Global Databases. Valid values are `writer` and `none`."
+        description: "Whether a connection opened with an inactive cluster writer endpoint should be verified to be a writer. Applicable to Aurora Global Databases. Valid values are `writer` and `none`. When unset, the connection is verified to be a writer only if the endpoint was substituted with a writer instance; otherwise no verification is performed."
         spellings:
-          ruby: { name: initial_connection_inactive_verify_role,           required: "No", defaultNote: "none", example: "writer" }
+          ruby: { name: initial_connection_inactive_verify_role,           required: "No", defaultNote: "writer if a writer was substituted; otherwise none", example: "writer" }
       - concept: accessibleRegions
         type: string
         availability: { ruby: true }
-        description: "Comma-separated list of AWS regions the application can reach. When set and a Global Aurora dialect is in use, candidate hosts in regions not listed are excluded before host selection."
+        description: "Comma-separated list of AWS regions the application can reach. Applicable to Aurora Global Databases, the only deployment whose instances span multiple regions. When set, candidate hosts in regions not listed are excluded before host selection."
         spellings:
           ruby: { name: accessible_regions,   required: "No", defaultNote: "all regions", example: "us-east-1,us-west-1" }
 
@@ -1813,8 +1870,9 @@ plugins:
           host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
           dbname: "mydb",
           wrapper_plugins: "bg",
-          bg_monitoring_connect_timeout: 10,
-          bg_monitoring_socket_timeout: 10
+          # The prefix is stripped and the setting is passed to the underlying driver, so use
+          # an option the driver accepts (e.g. pg: keepalives_idle; mysql2: read_timeout).
+          bg_monitoring_connect_timeout: 10
         )
     prereqCount:
       ruby: 0

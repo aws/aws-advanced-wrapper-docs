@@ -94,7 +94,8 @@ strategies. See [Host List Providers](#host-list-providers).
 
 - `hosts` / `all_hosts` — allowed and full host lists.
 - `host_list_provider` — the active provider.
-- `select_host(hosts, role, props)` and `register_host_selector(name, selector)` — strategy-based selection.
+- `select_host(hosts, role, strategy, props = nil)` — pick a host by role and host-selection strategy name.
+- `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Register the name in lowercase: `select_host` lowercases the requested strategy before looking it up.
 
 **When to use it**
 
@@ -120,21 +121,21 @@ Use it when behavior depends on the database/driver — for example the
 
 ### Session State Service
 
-Tracks per-connection session state (transaction status, autocommit) so it can
-be preserved across a connection switch.
+Tracks per-connection session state (transaction status, autocommit).
 
 **Access:** `service_container.session_state_service`
 
 **What it offers**
 
 - `in_transaction?` / `autocommit?` — current session flags.
-- `update_transaction_state(method_name, args, autocommit_before)` — fold a method call into the tracked state.
-- `begin` / `complete` / `reset` — bracket a connection switch.
+- `update_transaction_state(method_name, args, autocommit_before, dialect, connection, succeeded: true)` — fold a method call into the tracked state.
+- `reset` — clear the tracked state, for example after the connection is replaced.
 
 **When to use it**
 
-Use it when a plugin swaps connections and must carry session state (e.g.
-autocommit, open transaction) onto the new connection.
+Use it when a plugin needs to know whether the connection is inside a
+transaction or in autocommit mode, for example to decide whether a failed
+call can be retried transparently.
 
 ### Storage Service
 
@@ -209,7 +210,7 @@ The plugin manager initializes all plugins registered via the `wrapper_plugins` 
 
 #### Initiate Pipelines
 
-During the initial connection phase, where the plugin manager gets initialized, it initiates the host list provider and the connect pipeline. These two pipelines will set up a host list provider to be used by all the plugins and the initial connection. See [Pipelines](./pipelines) for how a call flows through the plugins.
+During the initial connection phase, the host list provider is set up for the connection (from the resolved database dialect), and then the initial connection runs through the connect pipeline. The host list provider is then used by all the plugins. See [Pipelines](./pipelines) for how a call flows through the plugins.
 
 All subsequent Ruby method calls will trigger the execute pipeline.
 
@@ -218,7 +219,7 @@ All subsequent Ruby method calls will trigger the execute pipeline.
 Plugins are ordered by a fixed weight (lower runs first / outermost). The
 built-in weights are: Blue/Green `200`, Custom Endpoint `250`, Initial
 Connection Strategy `300`, Failover `400`, GDB Failover `500`, IAM `1800`,
-Secrets Manager `1900`. `load_plugins` reads the `wrapper_plugins` list,
+Secrets Manager `1900`, KMS Encryption `2050`. `load_plugins` reads the `wrapper_plugins` list,
 sorts by weight, instantiates each with `(service_container, props)`, and
 **always appends `DefaultPlugin` last** — it is the pipeline terminus that
 actually opens the underlying driver connection.

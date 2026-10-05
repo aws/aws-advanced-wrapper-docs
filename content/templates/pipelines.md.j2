@@ -58,7 +58,7 @@ The connect pipeline performs any additional setup or post connection steps requ
 
 The most common usage of the connect pipeline is to fetch extra credentials from external locations.
 
-An example would be the IAM connection plugin. The IAM connection plugin generates an IAM authentication token to be used when establishing a connection. Since authentication is only required when establishing a {{ dg.connectionShort }} and not required for any subsequent execution, the IAM authentication plugin only needs to implement the connect pipeline.
+An example would be the IAM connection plugin. The IAM connection plugin generates an IAM authentication token to be used when establishing a connection. Since authentication is only required when establishing a {{ dg.connectionShort }} and not required for any subsequent execution, the IAM authentication plugin only needs to implement the connect pipeline{% if wrapper_id == 'ruby' %}s (`connect` and `internal_connect`){% endif %}.
 
 ## {{ dg.secondConnectHeading }}
 

@@ -14,11 +14,15 @@
     several    -> lists them in parentheses.
     none       -> falls back to the generic phrasing rather than emitting a
                   sentence with a dangling reference.
+
+  `conflict_error`, when given, names the error the wrapper raises if the
+  group's plugins are combined.
 #}
-{% macro exclusivity(group_label, this_code, others) -%}
+{% macro exclusivity(group_label, this_code, others, conflict_error=none) -%}
 Only one {{ group_label }} plugin may be enabled per connection. Do not use `{{ this_code }}` together with
 {%- if others | length == 1 %} the other `{{ others[0] }}` plugin
 {%- elif others | length > 1 %} any of the other {{ group_label }} plugins ({% for c in others %}`{{ c }}`{% if not loop.last %}, {% endif %}{% endfor %})
 {%- else %} any other {{ group_label }} plugin
 {%- endif %} at the same time for the same connection.
+{%- if conflict_error %} Configuring more than one raises a `{{ conflict_error }}` at connection initialization.{% endif %}
 {%- endmacro %}

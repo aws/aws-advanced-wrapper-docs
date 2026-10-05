@@ -88,7 +88,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 ```
 
 :::warning
-Only one failover plugin may be enabled per connection. Do not use `gdb_failover` together with the other `failover` plugin at the same time for the same connection.
+Only one failover plugin may be enabled per connection. Do not use `gdb_failover` together with the other `failover` plugin at the same time for the same connection. Configuring more than one raises a `PluginConflictError` at connection initialization.
 :::
 
 Verify plugin compatibility within your Ruby configuration using the [compatibility guide](../compatibility).
@@ -98,13 +98,17 @@ Verify plugin compatibility within your Ruby configuration using the [compatibil
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `failover_home_region` | String | Yes for endpoints with no region; otherwise No | parsed from URL | The AWS region the application runs in. Determines which of the in-home and out-of-home modes applies. Defaults to the region parsed from the connection endpoint, and is required when the endpoint carries no region (a Global Database endpoint, an IP address, or a custom domain).<br/><br/>Example: `us-west-1` |
-| `in_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`. When unset, the mode is derived from the initial connection endpoint: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`.<br/><br/>Example: `strict_writer` |
+| `in_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is** the home region. Values include `strict_writer`, `home_reader_or_writer`, `strict_home_reader`, `strict_out_of_home_reader`, `strict_any_reader`, `out_of_home_reader_or_writer`, and `any_reader_or_writer`. When unset, the mode is derived from the initial connection endpoint: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`. This plugin does not read `failover_mode`; use this parameter and `out_of_home_failover_mode` instead.<br/><br/>Example: `strict_writer` |
 | `out_of_home_failover_mode` | String | No | depends on URL | Failover mode used while the Global Database primary region **is not** the home region. Accepts the same values as the in-home mode. When unset, it is derived from the initial endpoint the same way as the in-home mode: a writer or global writer cluster endpoint defaults to `strict_writer`, and any other endpoint defaults to `home_reader_or_writer`.<br/><br/>Example: `strict_any_reader` |
 | `global_cluster_instance_host_patterns` | String | Yes for Global Databases; otherwise No | none | Comma-separated instance host patterns for every Global Database region. Prefix custom-domain patterns with `[region]`. Required for Aurora Global Databases; ignored otherwise.<br/><br/>Example: `?.xyz1.us-east-1.rds.amazonaws.com,?.xyz2.us-west-1.rds.amazonaws.com` |
-| `accessible_regions` | String | No | all regions | Comma-separated list of AWS regions the application can reach. When set, failover and topology monitoring only consider nodes in these regions. If the home region is also set, it must be included.<br/><br/>Example: `us-east-1,us-west-1` |
+| `accessible_regions` | String | No | all regions | Comma-separated list of AWS regions the application can reach. When set, failover only considers nodes in these regions as candidates; topology monitoring still tracks every region. If the home region is also set, it must be included.<br/><br/>Example: `us-east-1,us-west-1` |
 | `failover_timeout_sec` | Float | No | `300.0` | Maximum allowed time to attempt reconnecting to a new writer or reader instance after a cluster failover is initiated. *(sec)*<br/><br/>Example: `300.0` |
 | `cluster_topology_refresh_rate_sec` | Float | No | `5.0` | Cluster topology refresh rate while the cluster is not in failover (the regular slow monitoring rate). *(sec)*<br/><br/>Example: `5.0` |
 | `failover_reader_host_selector_strategy` | String | No | `random` | Strategy used to select a reader node during failover. See [host selection strategies](../host-selection-strategies) for the available values.<br/><br/>Example: `random` |
+| `cluster_topology_high_refresh_rate_sec` | Float | No | `0.1` | Interval between topology updates during the high-rate period after a new writer is detected. *(sec)*<br/><br/>Example: `0.1` |
+| `cluster_topology_max_instance_monitors` | Integer | No | `16` | Maximum number of per-instance topology monitors run in parallel during a topology update. When the cluster has more instances than this, only the first that many are monitored concurrently.<br/><br/>Example: `16` |
+| `cluster_id` | String | Required when one application uses multiple clusters; otherwise No | `1` | Unique identifier for a cluster. Connections with the same identifier share one topology monitor and cache; different clusters must use different identifiers. See [Cluster ID](../cluster-id).<br/><br/>Example: `my-global-db` |
+| `enable_connect_failover` | Boolean | No | `false` | Enables cluster-aware failover when the initial connection fails because of a network exception. The initial connection may be redirected to another instance.<br/><br/>Example: `true` |
 
 ## Configuration examples
 

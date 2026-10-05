@@ -74,7 +74,7 @@ notes:
   failoverNotLimitless: "Aurora Limitless shard groups manage their own routing; the failover plugin does not operate on the Limitless shard-group endpoint."
   gdbNotLimitless: "Aurora Limitless shard groups manage their own routing; the global database failover plugin does not operate on the Limitless shard-group endpoint."
   bgNotLimitless: "Aurora Limitless shard groups manage their own routing; the Blue/Green plugin does not operate on the Limitless shard-group endpoint."
-  initialConnNotCustomEndpoint: "The initial connection plugin is incompatible with the Aurora custom endpoint URL type."
+  initialConnCustomEndpointOptIn: "Supported, but by default the plugin passes an Aurora custom endpoint through unchanged. Set `initial_connection_substitute_host` to `any` or `reader` to resolve the custom endpoint to one of its member instances."
   initialConnNeedsClusterEndpoint: "The initial connection plugin needs a cluster endpoint to resolve; this endpoint points at a single host or has no discoverable topology."
   proxyDoesOwnFailover: "An RDS Proxy performs its own failover. Connecting through that endpoint with a simple retry is the recommended configuration for handling a failover event."
   # ✅-cell inline note, referenced via `noteRef`. Uses a {plugin:key} placeholder so
@@ -278,7 +278,7 @@ endpoints:
     Aurora Global Database Endpoint: { value: yes }
     Aurora Cluster Writer Endpoint: { value: yes }
     Aurora Cluster Reader Endpoint: { value: yes }
-    Aurora Cluster Custom Endpoint: { value: no, reason: initialConnNotCustomEndpoint }
+    Aurora Cluster Custom Endpoint: { value: yes, noteRef: initialConnCustomEndpointOptIn }
     Aurora Instance Endpoint, RDS Instance Endpoint: { value: no, reason: initialConnNeedsClusterEndpoint }
     RDS Multi-AZ DB Cluster Writer Endpoint: { value: yes }
     RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }

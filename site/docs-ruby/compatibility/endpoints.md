@@ -29,7 +29,7 @@ Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links
 | [`gdb_failover`](../using-plugins/gdb-failover) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^2] | ❌ [^5] | ✅ [^6] | ✅ [^6] | 
 | [`iam`](../using-plugins/iam-authentication) | ✅ [^7] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^8] | ✅ [^8] | 
 | [`secrets_manager`](../using-plugins/aws-secrets-manager) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^9] | ✅ [^9] | 
-| [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ❌ [^10] | ❌ [^11] | ✅ | ✅ | ❌ [^11] | ❌ [^11] | ❌ [^11] | ❌ [^11] | 
+| [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ✅ [^10] | ❌ [^11] | ✅ | ✅ | ❌ [^11] | ❌ [^11] | ❌ [^11] | ❌ [^11] | 
 | [`bg`](../using-plugins/blue-green) | ❌ [^12] | ✅ | ✅ | ✅ | ✅ | ❌ [^13] | ❌ [^13] | ✅ | ❌ [^14] | ✅ [^15] | ❌ [^16] | 
 
 ## Notes
@@ -52,7 +52,7 @@ Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links
 
 [^9]: Supported, but the region cannot be parsed from an IP address or custom domain, so set `secret_region` (unless the secret id is an ARN, which already contains the region).
 
-[^10]: The initial connection plugin is incompatible with the Aurora custom endpoint URL type.
+[^10]: Supported, but by default the plugin passes an Aurora custom endpoint through unchanged. Set `initial_connection_substitute_host` to `any` or `reader` to resolve the custom endpoint to one of its member instances.
 
 [^11]: The initial connection plugin needs a cluster endpoint to resolve; this endpoint points at a single host or has no discoverable topology.
 

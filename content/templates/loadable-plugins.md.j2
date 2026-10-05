@@ -45,7 +45,7 @@ Plugins can also subscribe to the following pipelines:
 |-----------------------------------------------------------------|:------------------------------:|
 | [Connect pipeline](./pipelines#connect-pipeline)                | connect                        |
 | [Internal connect pipeline](./pipelines#internal-connect-pipeline) | internal_connect            |
-| [Execute pipeline](./pipelines#execute-pipeline)                | execute                        |
+| [Execute pipeline](./pipelines#execute-pipeline)                | {{ dg.executeKey | default('execute') }} |
 {% endif %}
 
 ### Tips on Creating a Custom Plugin

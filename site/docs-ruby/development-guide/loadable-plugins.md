@@ -24,9 +24,11 @@ Plugins are invoked by the plugin manager through the pipelines for the methods 
 ### Creating a Custom Plugin
 
 A plugin is a plain object constructed with `(service_container, props)`. It
-defines a `subscribed_methods` set and implements any of `connect`,
-`internal_connect`, and `execute`. Reach shared capabilities through the
-service container — for example `service_container.host_service.hosts`,
+defines a `subscribed_methods` set and implements the pipeline method for
+every name it subscribes to: `connect` and `internal_connect` for the connect
+pipelines, and `execute` for every driver method. There is no base class
+providing pass-through defaults, so a plugin subscribed to `'*'` must implement
+all three. Reach shared capabilities through the service container — for example `service_container.host_service.hosts`,
 `service_container.dialect_service.db_dialect`, or
 `service_container.connection_service.current_connection`.
 
@@ -41,7 +43,17 @@ class MyPlugin
 
   def subscribed_methods = SUBSCRIBED
 
-  def execute(ruby_method, next_plugin, *args, **kwargs, &block)
+  def connect(host_info, driver_props, is_initial_connection, next_plugin)
+    next_plugin.call
+  end
+
+  def internal_connect(host_info, driver_props, wrapper_props, is_initial_connection, next_plugin)
+    next_plugin.call
+  end
+
+  # method_name is the qualified driver method being called, e.g.
+  # "connection.query", "connection.exec", or "result.each".
+  def execute(method_name, next_plugin, *args, **kwargs, &block)
     # ... run code before/after ...
     next_plugin.call
   end
@@ -50,12 +62,15 @@ end
 
 ### Register the Custom Plugin
 
-Register the plugin code, factory class, and (optionally) a weight, then
-include the code in the `wrapper_plugins` connection parameter:
+Register the plugin code, the plugin class, and (optionally) a weight, then
+include the code in the `wrapper_plugins` connection parameter. The plugin
+manager instantiates the class with `(service_container, props)` for each
+connection. Without a weight, the plugin runs immediately after the plugin
+listed before it in `wrapper_plugins`.
 
 ```ruby
 AwsAdvancedRubyDriverWrapper::Services::PluginManager.register_plugin(
-  "my_plugin", MyPluginFactory, weight: 1000)
+  "my_plugin", MyPlugin, weight: 1000)
 ```
 
 ### Subscribed Methods
@@ -70,7 +85,7 @@ Plugins can also subscribe to the following pipelines:
 |-----------------------------------------------------------------|:------------------------------:|
 | [Connect pipeline](./pipelines#connect-pipeline)                | connect                        |
 | [Internal connect pipeline](./pipelines#internal-connect-pipeline) | internal_connect            |
-| [Execute pipeline](./pipelines#execute-pipeline)                | execute                        |
+| [Execute pipeline](./pipelines#execute-pipeline)                | the qualified driver method name (e.g. `connection.query`, `connection.exec`) |
 
 ### Tips on Creating a Custom Plugin
 

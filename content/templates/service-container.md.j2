@@ -86,7 +86,7 @@ The {{ dg.pluginManagerShort }} initializes all plugins registered via the {{ dg
 
 #### Initiate Pipelines
 
-During the initial connection phase, where the {{ dg.pluginManagerShort }} gets initialized, it initiates the host list provider and the connect pipeline. These two pipelines will set up a host list provider to be used by all the plugins and the initial connection. See [Pipelines](./pipelines) for how a call flows through the plugins.
+{% if dg.extendedPipelines %}During the initial connection phase, where the {{ dg.pluginManagerShort }} gets initialized, it initiates the host list provider and the connect pipeline. These two pipelines will set up a host list provider to be used by all the plugins and the initial connection.{% else %}During the initial connection phase, the host list provider is set up for the connection (from the resolved database dialect), and then the initial connection runs through the connect pipeline. The host list provider is then used by all the plugins.{% endif %} See [Pipelines](./pipelines) for how a call flows through the plugins.
 
 All subsequent {{ dg.methodTerm }} will trigger the execute pipeline.
 {% if dg.pluginManagerNotes %}

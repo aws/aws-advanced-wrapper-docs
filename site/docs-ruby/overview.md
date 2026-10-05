@@ -92,7 +92,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
 )
 ```
 
-The calls your code already makes on the driver connection keep working, and the plugins act on each one. Like `PG::Connection.new`, `WrapperPgConnection.new` (and its alias `open`) also accepts a block: it yields the connection and closes it when the block returns.
+The calls your code already makes on the driver connection keep working, and the plugins act on each one.
 
 ### Next
 

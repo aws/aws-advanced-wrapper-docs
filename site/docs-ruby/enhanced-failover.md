@@ -182,8 +182,8 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   user: "<username>",
   password: "<password>",
   wrapper_plugins: "failover",
-  # Prefixed settings are passed to the driver as-is, so use options that
-  # the driver accepts (pg: libpq options; mysql2: e.g. read_timeout).
+  # The prefix is stripped and the setting is passed to the underlying driver, so use
+  # an option the driver accepts (e.g. pg: keepalives_idle; mysql2: read_timeout).
   topology_monitoring_connect_timeout: 10
 )
 

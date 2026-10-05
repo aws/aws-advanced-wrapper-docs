@@ -102,8 +102,8 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
   dbname: "mydb",
   wrapper_plugins: "bg",
-  # Prefixed settings are passed to the driver as-is, so use options that
-  # the driver accepts (pg: libpq options; mysql2: e.g. read_timeout).
+  # The prefix is stripped and the setting is passed to the underlying driver, so use
+  # an option the driver accepts (e.g. pg: keepalives_idle; mysql2: read_timeout).
   bg_monitoring_connect_timeout: 10
 )
 

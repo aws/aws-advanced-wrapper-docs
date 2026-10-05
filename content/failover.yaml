@@ -157,9 +157,7 @@ wrappers:
                 )
             - text: >-
                 The calls your code already makes on the driver connection keep working,
-                and the plugins act on each one. Like `PG::Connection.new`,
-                `WrapperPgConnection.new` (and its alias `open`) also accepts a block: it
-                yields the connection and closes it when the block returns.
+                and the plugins act on each one.
 
         - title: "Next"
           blocks:
@@ -295,8 +293,8 @@ enhanced:
           user: "<username>",
           password: "<password>",
           wrapper_plugins: "failover",
-          # Prefixed settings are passed to the driver as-is, so use options that
-          # the driver accepts (pg: libpq options; mysql2: e.g. read_timeout).
+          # The prefix is stripped and the setting is passed to the underlying driver, so use
+          # an option the driver accepts (e.g. pg: keepalives_idle; mysql2: read_timeout).
           topology_monitoring_connect_timeout: 10
         )
       databaseProperty: dbname

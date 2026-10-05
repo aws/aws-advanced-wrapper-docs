@@ -131,7 +131,7 @@ plugins:
           ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
       - concept: iamExpiration
         type: integer
-        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0`, or `0` or less, is rejected."
+        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected."
         spellings:
           ruby: { name: iam_expiration_sec, type: float, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
       - concept: iamTokenProperty
@@ -1775,7 +1775,7 @@ plugins:
       - concept: accessibleRegions
         type: string
         availability: { ruby: true }
-        description: "Comma-separated list of AWS regions the application can reach. When set, candidate hosts in regions not listed are excluded before host selection. This applies to any deployment, but is mainly useful for Aurora Global Databases."
+        description: "Comma-separated list of AWS regions the application can reach. Applicable to Aurora Global Databases, the only deployment whose instances span multiple regions. When set, candidate hosts in regions not listed are excluded before host selection."
         spellings:
           ruby: { name: accessible_regions,   required: "No", defaultNote: "all regions", example: "us-east-1,us-west-1" }
 
@@ -1870,8 +1870,8 @@ plugins:
           host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
           dbname: "mydb",
           wrapper_plugins: "bg",
-          # Prefixed settings are passed to the driver as-is, so use options that
-          # the driver accepts (pg: libpq options; mysql2: e.g. read_timeout).
+          # The prefix is stripped and the setting is passed to the underlying driver, so use
+          # an option the driver accepts (e.g. pg: keepalives_idle; mysql2: read_timeout).
           bg_monitoring_connect_timeout: 10
         )
     prereqCount:

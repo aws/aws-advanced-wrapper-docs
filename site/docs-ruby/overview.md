@@ -64,6 +64,15 @@ production:
 
 Active Record keeps its own connection pool and its reading and writing roles; the wrapper's plugins run underneath both.
 
+:::note Mixing wrapped and standard adapters in one application
+The wrapped adapters register their type information under the underlying
+`postgresql` and `mysql2` adapter names. If one application uses both a
+standard connection (`postgresql`/`mysql2`) and a wrapped one
+(`aws_postgresql`/`aws_mysql2`), a custom type registered for one is shared
+with the other, because both resolve under the same underlying adapter key.
+:::
+
+
 ### Or connect with the driver directly
 
 If you use the `pg` or `mysql2` gem without Active Record, the wrapper provides connection classes that stand in for `PG::Connection` and `Mysql2::Client`:

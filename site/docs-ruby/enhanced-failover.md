@@ -260,9 +260,12 @@ discard the connection yourself.
 
 The AWS Advanced Ruby Driver Wrapper's `SessionStateService` tracks transaction and
 autocommit state but does not transfer every session setting across a failover.
-`configure_connection` restores what ActiveRecord itself configures; anything else your
-application depends on — search path, timezone, prepared statements — is yours to
-re-apply before replaying work.
+`configure_connection` restores what ActiveRecord itself configures, and the adapter
+clears its prepared-statement cache after failover (`clear_cache!(new_connection: true)`)
+so statements prepared on the old physical connection are re-prepared automatically on
+their next use rather than failing. Anything else your application depends on — search
+path, timezone, temporary tables, advisory locks — is yours to re-apply before replaying
+work.
 
 ## Re-applying session state automatically after failover
 
@@ -290,6 +293,15 @@ production:
 Put the session settings your application relies on under `variables:`. Because the
 pooled connection object is preserved across failover (the adapter reconnects it in
 place rather than discarding it), and `configure_connection` re-runs on the new writer,
-those variables are restored automatically. Session state that is *not* expressed as a
-`variables:` entry — for example prepared statements, temporary tables, or advisory
-locks — is still yours to re-establish before replaying work.
+those variables are restored automatically. The adapter also clears its prepared-statement
+cache on failover, so statements re-prepare themselves on next use. Session state that is
+*not* expressed as a `variables:` entry and is not a prepared statement — for example
+temporary tables or advisory locks — is still yours to re-establish before replaying work.
+
+## Failover in forking web servers and job workers
+
+The topology monitor runs in background threads, and those threads do not survive a
+`fork`. When a process forks — Puma with `preload_app!`, Unicorn workers, Resque jobs —
+the child starts its own monitors on first use and leaves the parent's monitoring
+connections untouched, so the child discovers topology and fails over on its own.
+Failover works in forked workers with no extra configuration.

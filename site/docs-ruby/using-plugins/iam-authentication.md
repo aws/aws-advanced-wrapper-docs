@@ -140,7 +140,7 @@ Verify plugin compatibility within your Ruby configuration using the [compatibil
 | `iam_host` | String | No | derived from host | Overrides the hostname used to generate the IAM token. Required when connecting through a custom endpoint. The default is derived from the connection host.<br/><br/>Example: `my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com` |
 | `iam_port` | Integer | No | dialect default | Overrides the port used to generate the IAM token. The default is determined from the underlying driver protocol or the dialect default.<br/><br/>Example: `5432` |
 | `iam_region` | String | No | parsed from host | Overrides the AWS region used to generate the IAM token. The default is parsed from the connection string.<br/><br/>Example: `us-east-1` |
-| `iam_expiration_sec` | Float | No | `870.0` | Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected. *(sec)*<br/><br/>Example: `600.0 (maximum 870.0)` |
+| `iam_expiration_sec` | Float | No | `870.0` | Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values above `840.0` (including the `870.0` default) behave as `840.0`. A value greater than `870.0` or less than or equal to `0` is rejected. *(sec)*<br/><br/>Example: `600.0 (maximum 870.0)` |
 | `iam_access_token_property_name` | Symbol | No | `:password` | The connection property name the generated token is injected into. Some underlying drivers require a specific property name for the token.<br/><br/>Example: `:password` |
 | `aws_credentials_provider` | Object | No | SDK default chain | A custom AWS credentials provider instance. One property is read by the IAM authentication, Secrets Manager and KMS encryption plugins, so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain.<br/><br/>Example: `Aws::AssumeRoleCredentials.new(...)` |
 
@@ -185,8 +185,8 @@ different credentials never share a token, and a credentials provider that
 refreshes to a new access key gets a new token. When the credentials provider
 resolves to no credentials, the token is not cached.
 
-A cached token is reused until 60 seconds before the expiry signed into it
-(`iam_expiration_sec` applies only when that expiry cannot be read). If a
+A cached token is reused until `iam_expiration_sec` elapses or until 60
+seconds before the token's own 15-minute expiry, whichever comes first. If a
 login error occurs with a cached token, the plugin automatically fetches a
 fresh token and retries the connection once.
 

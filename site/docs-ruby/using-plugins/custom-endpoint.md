@@ -77,9 +77,9 @@ endpoint's members, so add `aws-sdk-rds` to your Gemfile:
 gem 'aws-sdk-rds'
 ```
 
-The plugin uses the AWS SDK default credential provider chain, so the credentials 
-must be available through the chain (for example environment variables, an instance 
-profile, or an ECS task role). See [AWS Credentials](../aws-credentials).
+The plugin signs these calls with the provider given in `aws_credentials_provider`,
+or with the AWS SDK default credential provider chain when it is not set. See
+[AWS Credentials](../aws-credentials).
 :::
 
 
@@ -94,3 +94,4 @@ profile, or an ECS task role). See [AWS Credentials](../aws-credentials).
 | `custom_endpoint_monitor_expiration_sec` | Float | No | `900.0` | How long a monitor runs without use before expiring and being removed. *(sec)*<br/><br/>Example: `600.0` |
 | `wait_for_custom_endpoint_info` | Boolean | No | `true` | Whether to wait for custom endpoint info to become available before connecting or executing a method. Disabling this may result in occasional connections to instances outside of the custom endpoint.<br/><br/>Example: `true` |
 | `wait_for_custom_endpoint_info_timeout_sec` | Float | No | `5.0` | Maximum time the plugin waits for custom endpoint info to be made available by the monitor. *(sec)*<br/><br/>Example: `7.0` |
+| `aws_credentials_provider` | Object | No | SDK default chain | A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager, KMS encryption and custom endpoint — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain. The custom endpoint monitor is shared by every connection to the same custom endpoint, so it uses the provider of the first connection that starts it.<br/><br/>Example: `Aws::AssumeRoleCredentials.new(...)` |

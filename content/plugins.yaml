@@ -131,7 +131,7 @@ plugins:
           ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
       - concept: iamExpiration
         type: integer
-        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values above `840.0` (including the `870.0` default) behave as `840.0`. The token cache is shared by every connection in the process, and its lifetime is set by the first connection that uses the IAM plugin; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected."
+        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process, and its lifetime is set by the first connection that uses the IAM plugin; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected."
         spellings:
           ruby: { name: iam_expiration_sec, type: float, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
       - concept: iamTokenProperty

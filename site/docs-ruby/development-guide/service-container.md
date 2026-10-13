@@ -95,7 +95,8 @@ strategies. See [Host List Providers](#host-list-providers).
 - `hosts` / `all_hosts` — allowed and full host lists.
 - `host_list_provider` — the active provider.
 - `select_host(hosts, role, strategy, props = nil)` — pick a host by role and host-selection strategy name.
-- `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Register the name in lowercase: `select_host` lowercases the requested strategy before looking it up.
+- `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Strategy names are case-insensitive.
+- `HostService.validate_strategy!(name)` — a class method that raises `Unsupported host selection strategy` when no selector is registered under the name. Plugins that take a strategy name call it when they are constructed.
 
 **When to use it**
 

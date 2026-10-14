@@ -40,9 +40,9 @@ aws_credentials_provider: Aws::AssumeRoleCredentials.new(
 )
 ```
 
-This is a single property shared by the IAM, Secrets Manager, and KMS plugins, not one
-property each, so setting it once covers token generation, secret retrieval, and data-key
-unwrapping alike. When it is not set, each plugin falls back to the default chain above.
+This is a single property shared by all four plugins, not one property each, so setting it
+once covers token generation, secret retrieval, data-key unwrapping, and custom endpoint
+lookups alike. When it is not set, each plugin falls back to the default chain above.
 
 ## Long-term and temporary credentials
 

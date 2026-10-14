@@ -18,8 +18,9 @@ at random from the hosts that match the requested role and are currently marked 
 | `random` | Selects at random from the available hosts matching the requested role. | none |
 
 It is also the default, so leaving the strategy properties unset gives you random
-selection.
-:::
+selection. Strategy names are case-insensitive. Naming a strategy that is not registered
+raises `Unsupported host selection strategy: '<name>'` when the connection is set up, so a
+typo fails fast instead of silently changing how hosts are chosen.
 
 ## Where it applies
 
@@ -61,10 +62,13 @@ production:
 ```
 
 Three constraints are worth knowing. A selector is shared by every connection in the process,
-so `select_host` must be safe to call from multiple threads. Register the name in lowercase:
-the wrapper lowercases the configured strategy name before looking it up. And a built-in name 
-cannot be replaced — registering `random` raises `Cannot override default host selection 
-strategy: 'random'`.
+so `select_host` must be safe to call from multiple threads. Register the selector before
+opening any connection that names it, because the plugins check the strategy name when the
+connection is set up. And a built-in name cannot be replaced, in any casing — registering
+`random` raises `Cannot override default host selection strategy: 'random'`.
+
+If a selector raises an error while choosing a host, the wrapper logs a warning and treats it
+as "no eligible host" for that attempt.
 
 :::note
 Filtering to available hosts is the selector's own responsibility. The built-in `random`

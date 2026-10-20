@@ -121,6 +121,10 @@ TLS is not optional in practice when a credential travels over the connection:
 - [IAM Authentication](using-plugins/iam-authentication) sends the generated token as the
   password. With MySQL it is sent in cleartext, because IAM authentication relies on the
   `mysql_clear_password` client plugin.
+- [Federated Authentication](using-plugins/federated-auth) and
+  [Okta Authentication](using-plugins/okta-auth) authenticate through an external identity
+  provider and then connect with an IAM token, so they send that token as the password in
+  exactly the same way as IAM Authentication — including in cleartext on MySQL.
 - [AWS Secrets Manager](using-plugins/aws-secrets-manager) sends the retrieved password on
   the connection like any other password.
 

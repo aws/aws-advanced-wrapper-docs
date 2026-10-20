@@ -53,7 +53,7 @@ wrappers:
     compatibilityGuide: "../compatibility"
     pluginGroups:
       failover: [failover, gdb_failover]
-      auth: [iam, secrets_manager]
+      auth: [iam, secrets_manager, federated_auth, okta]
     connectSnippet: |
       require 'aws_advanced_ruby_driver_wrapper/postgresql'
 

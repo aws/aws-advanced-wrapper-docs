@@ -144,6 +144,24 @@ pages:
     template: plugin-aws-secrets-manager
     contextProfile: plugins
 
+  - id: using-plugins-federated-auth
+    path: using-plugins/federated-auth
+    title: Federated Authentication Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-saml-auth
+    contextProfile: plugins
+
+  - id: using-plugins-okta-auth
+    path: using-plugins/okta-auth
+    title: Okta Authentication Plugin
+    category: Using Plugins
+    wrappers: [ruby]
+    parent: overview
+    template: plugin-saml-auth
+    contextProfile: plugins
+
   - id: using-plugins-initial-connection-strategy
     path: using-plugins/initial-connection-strategy
     title: Initial Connection Strategy Plugin

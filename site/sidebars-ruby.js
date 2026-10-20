@@ -16,6 +16,8 @@ const sidebars = {
         "using-plugins/gdb-failover",
         "using-plugins/iam-authentication",
         "using-plugins/aws-secrets-manager",
+        "using-plugins/federated-auth",
+        "using-plugins/okta-auth",
         "using-plugins/initial-connection-strategy",
         "using-plugins/kms-encryption"
       ],

@@ -1,0 +1,27 @@
+{#
+  The "only one plugin from this group" warning admonition, emitted once per
+  plugin page.
+
+  The import + group/`others` computation + warning block used to be copy-pasted
+  into every plugin template (iam, secrets-manager, saml, gdb-failover) and the
+  enhanced-failover page; a change to how `others` is derived or to the admonition
+  meant editing each one. Now each template does a single
+  `{% include "partials/plugin-exclusivity-banner.md.j2" %}`.
+
+  Resolves the current plugin's group and code two ways, so it serves both page
+  shapes without duplication:
+    - plugin pages (the `plugins` profile exposes `plugin`): uses
+      `plugin.pluginGroup` and `plugin.code`.
+    - the enhanced-failover page (no `plugin` in context): the template sets
+      `banner_group` and `banner_code` before the include.
+  Also relies on `wrapper.pluginGroups`, `plugin_group_labels`, and `wrapper_id`
+  from the parent context. The exact sentence comes from the shared `exclusivity`
+  macro, so the wording still has a single source (see plugin-exclusivity.md.j2).
+#}
+{% import "partials/plugin-exclusivity.md.j2" as ex %}
+{% set group = plugin.pluginGroup if plugin is defined else banner_group %}
+{% set this_code = plugin.code if plugin is defined else banner_code %}
+{% set others = (wrapper.pluginGroups[group] or []) | reject('equalto', this_code) | list %}
+:::warning Only one {{ plugin_group_labels[group] }} plugin at a time
+{{ ex.exclusivity(plugin_group_labels[group], this_code, others, 'PluginConflictError' if wrapper_id == 'ruby' else none) }}
+:::

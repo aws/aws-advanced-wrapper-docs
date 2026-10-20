@@ -57,6 +57,7 @@ CONTENT = os.path.join(ROOT, "content")
 SITE = os.path.join(ROOT, "site")
 GENERATED = os.path.join(SITE, "src", "generated")
 
+ENV = None
 
 def load(name):
     path = os.path.join(CONTENT, name)
@@ -202,10 +203,19 @@ def _profile_compatibility(page, wid, regs):
     # Named note library (see `notes:` in compatibility.yaml). A note value is a
     # shared string, or a per-wrapper map; {plugin:<key>} placeholders in the text
     # are substituted with this wrapper's plugin code.
-    note_library = reg.get("notes", {}) or {}
+    note_library = dict(reg.get("notes", {}) or {})
     # Map every plugin the wrapper has (incl. universal) from abstract key -> code,
     # for {plugin:<key>} placeholder substitution in note text.
     key_to_code = {p["key"]: p["code"] for p in all_plugins}
+
+    failover_reg = regs["failover"]
+    auth_label = (failover_reg.get("pluginGroupLabels", {}) or {}).get("auth", "authentication")
+    auth_group = ((failover_reg.get("wrappers", {}) or {}).get(wid, {}) or {}).get("pluginGroups", {}).get("auth", [])
+    present_codes = {p["code"] for p in all_plugins}
+    auth_codes = [c for c in auth_group if c in present_codes]
+    if ENV is not None and auth_codes:
+        excl = ENV.get_template("partials/plugin-exclusivity.md.j2").module
+        note_library["oneAuthPlugin"] = excl.exclusivity_footnote(auth_label, auth_codes).strip()
 
     def note_text_for(*, reason="", note_ref="", literal=""):
         """Resolve final note text for one cell. Precedence: a library reference
@@ -308,6 +318,10 @@ def _profile_compatibility(page, wid, regs):
     order = list(all_plugins)
     pos = {p["code"]: i for i, p in enumerate(order)}
     notes = []
+    # Cells that resolve to the same note text share one footnote number, reused
+    # across every table on the page (the auth-exclusivity note, for example,
+    # applies to many pairs). Numbers are assigned in reading order.
+    cross_marker_by_text = {}
 
     def build_table(columns, rows):
         out_rows = []
@@ -330,13 +344,17 @@ def _profile_compatibility(page, wid, regs):
                     cell = None
                 marker = None
                 if state == "no":
-                    marker = len(notes) + 1
                     text = note_text_for(
                         reason=cell.get("reason") or "",
                         note_ref=cell.get("note_ref") or "",
                         literal=cell.get("note") or "",
                     )
-                    notes.append({"n": marker, "text": text})
+                    if text in cross_marker_by_text:
+                        marker = cross_marker_by_text[text]
+                    else:
+                        marker = len(notes) + 1
+                        cross_marker_by_text[text] = marker
+                        notes.append({"n": marker, "text": text})
                 cells.append({"state": state, "marker": marker})
             out_rows.append({"plugin": row, "cells": cells})
         return {"columns": columns, "rows": out_rows}
@@ -499,13 +517,13 @@ def _profile_plugins(page, wid, regs):
         "code": (entry.get("code") or {}).get(wid),
         "availableSince": (entry.get("availableSince") or {}).get(wid),
         "pluginGroup": entry.get("pluginGroup"),
-        "intro": entry.get("intro"),
-        "note": entry.get("note"),
-        "hostRequirement": entry.get("hostRequirement"),
-        "secretData": entry.get("secretData"),
-        "globalDatabases": entry.get("globalDatabases"),
-        "serverSideEnforcement": entry.get("serverSideEnforcement"),
-        "hardening": entry.get("hardening"),
+        "intro": by_wrapper("intro"),
+        "note": by_wrapper("note"),
+        "hostRequirement": by_wrapper("hostRequirement"),
+        "secretData": by_wrapper("secretData"),
+        "globalDatabases": by_wrapper("globalDatabases"),
+        "serverSideEnforcement": by_wrapper("serverSideEnforcement"),
+        "hardening": by_wrapper("hardening"),
         "adminUtility": (entry.get("adminUtility") or {}).get(wid),
         "supported": entry.get("supported"),
         "enableSnippet": (entry.get("enableSnippet") or {}).get(wid),
@@ -682,6 +700,8 @@ def main():
         lstrip_blocks=True,
     )
     env.filters["wrapcode"] = lambda v: f"`{v}`"
+    global ENV
+    ENV = env
 
     # Clean previous generated output.
     for wid in wrappers:

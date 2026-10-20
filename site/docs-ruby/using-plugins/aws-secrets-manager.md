@@ -14,7 +14,7 @@ Version 1.0.0
 :::
 
 :::warning Only one authentication plugin at a time
-The `secrets_manager` and `iam` plugins are mutually exclusive — only one authentication plugin may be active at a time. Configuring both in `wrapper_plugins` raises a `PluginConflictError` at connection initialization.
+Only one authentication plugin may be enabled per connection. Do not use `secrets_manager` together with any of the other authentication plugins (`iam`, `federated_auth`, `okta`) at the same time for the same connection. Configuring more than one raises a `PluginConflictError` at connection initialization.
 :::
 
 ## Prerequisites

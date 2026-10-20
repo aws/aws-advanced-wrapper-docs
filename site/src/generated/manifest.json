@@ -79,6 +79,24 @@
       "parentPath": "overview",
       "category": "Using Plugins"
     },
+    "using-plugins/federated-auth": {
+      "path": "using-plugins/federated-auth",
+      "title": "Federated Authentication Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
+    "using-plugins/okta-auth": {
+      "path": "using-plugins/okta-auth",
+      "title": "Okta Authentication Plugin",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Using Plugins"
+    },
     "using-plugins/initial-connection-strategy": {
       "path": "using-plugins/initial-connection-strategy",
       "title": "Initial Connection Strategy Plugin",

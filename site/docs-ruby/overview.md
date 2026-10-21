@@ -21,7 +21,7 @@ will follow your choice where an equivalent page exists.
 
 ## Getting started
 
-Requires Ruby 3.3 or later. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, and `mysql2` 0.5.7 or later.
+Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, and `mysql2` 0.5.7 or later.
 
 ### 1. Add the gem
 
@@ -35,11 +35,32 @@ gem 'pg'        # or: gem 'mysql2'
 bundle install
 ```
 
-Bundler requires the gem for you (in a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'`). That single require registers the Active Record adapters and makes the connection classes, error classes, and other public API available for direct use.
+Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
+
+:::warning
+On Ruby 3.4 or later, also add these to your Gemfile:
+
+```ruby
+gem 'base64'
+gem 'bigdecimal'
+gem 'fiddle'
+gem 'logger'
+```
+
+Ruby 3.4 removed all four from the default gems. The wrapper requires
+them when it loads but does not declare them, so a bundle without them
+raises `LoadError` on the first require. Outside a bundle they are
+usually already installed.
+:::
+
 
 ### 2. Point Active Record at your cluster
 
-The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`, which are drop-in replacements for `postgresql` and `mysql2`. Change the adapter name and point the host at your cluster endpoint:
+The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`, which are drop-in replacements for `postgresql` and `mysql2`.
+
+Bundler requires the gem for you. In a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'` first: that single require is what registers both adapters, and without it Active Record reports `aws_postgresql` as a nonexistent adapter.
+
+Change the adapter name and point the host at your cluster endpoint:
 
 ```yaml
 # config/database.yml
@@ -51,7 +72,7 @@ production:
   password: <password>
 ```
 
-That is the whole change — no application code moves. When `wrapper_plugins` is not set, the wrapper loads `failover` and `initial_connection`, so connections made through this adapter already recover when the cluster promotes a new writer. Enable more by adding wrapper properties alongside the Active Record keys. Setting `wrapper_plugins` replaces the default list rather than adding to it, so list the defaults you want to keep:
+That is the whole change — no application code moves, and connections made through this adapter already recover when the cluster promotes a new writer. Wrapper properties go alongside the Active Record keys:
 
 ```yaml
 production:
@@ -61,6 +82,8 @@ production:
   iam_region: us-east-1
   failover_timeout_sec: 300.0     # seconds
 ```
+
+`wrapper_plugins` is optional — leaving it out loads `failover,initial_connection`. Setting it replaces the default list rather than adding to it, so list the defaults you want to keep.
 
 Active Record keeps its own connection pool and its reading and writing roles; the wrapper's plugins run underneath both.
 
@@ -73,12 +96,24 @@ with the other, because both resolve under the same underlying adapter key.
 :::
 
 
+:::note Keeping the password out of your source
+Read it from the environment with `ENV.fetch('PGPASSWORD')`, or have
+AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
+`password:` key, as described on
+[AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a
+database user with no password at all, add `iam` instead; see
+[IAM Authentication Plugin](using-plugins/iam-authentication).
+:::
+
+
 ### Or connect with the driver directly
 
-If you use the `pg` or `mysql2` gem without Active Record, the wrapper provides connection classes that stand in for `PG::Connection` and `Mysql2::Client`:
+Without Active Record, the wrapper provides connection classes that stand in for `PG::Connection` and `Mysql2::Client`. This is a complete program; save it as `main.rb` and run it:
 
 ```ruby
-# PostgreSQL (pg)
+# main.rb
+require 'aws_advanced_ruby_driver_wrapper/postgresql'
+
 conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
   dbname: 'mydb',
@@ -87,23 +122,31 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
   wrapper_plugins: 'failover',
   failover_timeout_sec: 300.0
 )
+
+begin
+  result = conn.exec('SELECT version()')
+  puts result.first['version']
+ensure
+  conn.close
+end
 ```
 
-```ruby
-# MySQL (mysql2)
-conn = AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
-  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
-  database: 'mydb',
-  username: '<username>',
-  password: '<password>',
-  wrapper_plugins: 'failover',
-  failover_timeout_sec: 300.0
-)
+```bash
+bundle exec ruby main.rb
 ```
 
-The calls your code already makes on the driver connection keep working, and the plugins act on each one.
+`require 'aws_advanced_ruby_driver_wrapper/postgresql'` is the PostgreSQL entry point; for MySQL use `require 'aws_advanced_ruby_driver_wrapper/mysql'` and `AwsAdvancedRubyDriverWrapper::WrapperMysql2Client`, which takes `database:` and `username:` where the PostgreSQL class takes `dbname:` and `user:`. Either class stands in for the driver's own (`PG::Connection`, `Mysql2::Client`): the calls your code already makes keep working, and the plugins act on each one.
+
+:::warning
+`exec` returns its result and does not yield to a block, unlike
+`PG::Connection#exec`. Use the return value as above.
+`conn.exec(sql) { |result| ... }` runs the query but never calls the
+block, so the result is silently discarded.
+:::
+
 
 ### Next
 
-Not sure which plugins you need? [Set up by Scenario](setup) builds a configuration from a few questions about your application. To check a combination before shipping, see [Plugin Compatibility](compatibility).
+Every wrapper property the example did not use is listed with its type, default and unit on the plugin page that reads it, starting with [Enhanced Failover Plugin](enhanced-failover). To check a combination before shipping, see [Plugin Compatibility](compatibility).
 
+Not sure which plugins you need? [Set up by Scenario](setup) builds a configuration from a few questions about your application.

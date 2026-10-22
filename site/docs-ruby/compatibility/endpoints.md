@@ -29,6 +29,8 @@ Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links
 | [`gdb_failover`](../using-plugins/gdb-failover) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^2] | ❌ [^5] | ✅ [^6] | ✅ [^6] | 
 | [`iam`](../using-plugins/iam-authentication) | ✅ [^7] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^8] | ✅ [^8] | 
 | [`secrets_manager`](../using-plugins/aws-secrets-manager) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^9] | ✅ [^9] | 
+| [`federated_auth`](../using-plugins/federated-auth) | ✅ [^7] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^8] | ✅ [^8] | 
+| [`okta`](../using-plugins/okta-auth) | ✅ [^7] | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ [^8] | ✅ [^8] | 
 | [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ✅ [^10] | ❌ [^11] | ✅ | ✅ | ❌ [^11] | ❌ [^11] | ❌ [^11] | ❌ [^11] | 
 | [`bg`](../using-plugins/blue-green) | ❌ [^12] | ✅ | ✅ | ✅ | ✅ | ❌ [^13] | ❌ [^13] | ✅ | ❌ [^14] | ✅ [^15] | ❌ [^16] | 
 

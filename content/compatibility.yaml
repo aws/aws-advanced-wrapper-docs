@@ -40,6 +40,12 @@ plugins:
   - key: awsSecretsManager
     codes: { ruby: secrets_manager }
     page: using-plugins/aws-secrets-manager
+  - key: federatedAuth
+    codes: { ruby: federated_auth }
+    page: using-plugins/federated-auth
+  - key: oktaAuth
+    codes: { ruby: okta }
+    page: using-plugins/okta-auth
   - key: initialConnection
     codes: { ruby: initial_connection }
     page: using-plugins/initial-connection-strategy
@@ -65,7 +71,7 @@ notes:
   gdbUseFailoverInstead: "The global database failover plugin can function here, but the failover plugin is recommended instead — it provides the same failover coverage for a single-region cluster while consuming fewer resources."
   failoverUseGdbInstead: "On an Aurora global database, use the global database failover plugin ({plugin:gdbFailover}) instead — it is region-aware and reconnects across the global cluster's regions, which the standard failover plugin does not do."
   initialConnNeedsClusterTopology: "The initial connection plugin resolves a cluster endpoint to an instance; this deployment has no cluster topology to resolve."
-  awsAuthNotCommunity: "IAM and Secrets Manager authentication are Amazon RDS/Aurora features; a community database you run yourself does not support them."
+  awsAuthNotCommunity: "IAM and Secrets Manager authentication are Amazon RDS/Aurora features; a community database you run yourself does not support them. The Federated Authentication (AD FS) and Okta Authentication plugins obtain their database credential through IAM as well, so the same limitation applies to them."
   bgNotGlobal: "AWS does not support Blue/Green deployments on Aurora global databases."
   bgNotMultiAzCluster: "AWS Blue/Green deployments are not available for RDS Multi-AZ DB clusters (only for Multi-AZ DB instance deployments)."
   bgNotCommunity: "Blue/Green deployments are an Amazon RDS/Aurora feature; a community database you run yourself cannot use one."
@@ -198,6 +204,20 @@ databaseTypes:
     RDS Multi-AZ DB Instance deployment (2 instances) (MySQL and PG): { value: yes }
     RDS Single-AZ Instance deployment (1 instance) (MySQL and PG): { value: yes }
     Community Database (MySQL and PG): { value: no, reason: awsAuthNotCommunity }
+  federatedAuth:
+    Aurora Global Database (MySQL and PG): { value: yes }
+    Aurora Cluster (MySQL and PG): { value: yes }
+    RDS Multi-AZ DB Cluster deployment (3 instances) (MySQL and PG): { value: yes }
+    RDS Multi-AZ DB Instance deployment (2 instances) (MySQL and PG): { value: yes }
+    RDS Single-AZ Instance deployment (1 instance) (MySQL and PG): { value: yes }
+    Community Database (MySQL and PG): { value: no, reason: awsAuthNotCommunity }
+  oktaAuth:
+    Aurora Global Database (MySQL and PG): { value: yes }
+    Aurora Cluster (MySQL and PG): { value: yes }
+    RDS Multi-AZ DB Cluster deployment (3 instances) (MySQL and PG): { value: yes }
+    RDS Multi-AZ DB Instance deployment (2 instances) (MySQL and PG): { value: yes }
+    RDS Single-AZ Instance deployment (1 instance) (MySQL and PG): { value: yes }
+    Community Database (MySQL and PG): { value: no, reason: awsAuthNotCommunity }
   initialConnection:
     Aurora Global Database (MySQL and PG): { value: yes }
     Aurora Cluster (MySQL and PG): { value: yes }
@@ -274,6 +294,30 @@ endpoints:
     DB Shard Group Endpoint (Aurora Limitless): { value: yes }
     IP address: { value: yes, noteRef: secretsNeedsRegion }
     User custom domain (CNAME alias): { value: yes, noteRef: secretsNeedsRegion }
+  federatedAuth:
+    Aurora Global Database Endpoint: { value: yes, noteRef: iamNeedsInitialConn }
+    Aurora Cluster Writer Endpoint: { value: yes }
+    Aurora Cluster Reader Endpoint: { value: yes }
+    Aurora Cluster Custom Endpoint: { value: yes }
+    Aurora Instance Endpoint, RDS Instance Endpoint: { value: yes }
+    RDS Multi-AZ DB Cluster Writer Endpoint: { value: yes }
+    RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }
+    RDS Proxy Endpoint: { value: yes }
+    DB Shard Group Endpoint (Aurora Limitless): { value: yes }
+    IP address: { value: yes, noteRef: iamNeedsHostOverride }
+    User custom domain (CNAME alias): { value: yes, noteRef: iamNeedsHostOverride }
+  oktaAuth:
+    Aurora Global Database Endpoint: { value: yes, noteRef: iamNeedsInitialConn }
+    Aurora Cluster Writer Endpoint: { value: yes }
+    Aurora Cluster Reader Endpoint: { value: yes }
+    Aurora Cluster Custom Endpoint: { value: yes }
+    Aurora Instance Endpoint, RDS Instance Endpoint: { value: yes }
+    RDS Multi-AZ DB Cluster Writer Endpoint: { value: yes }
+    RDS Multi-AZ DB Cluster Reader Endpoint: { value: yes }
+    RDS Proxy Endpoint: { value: yes }
+    DB Shard Group Endpoint (Aurora Limitless): { value: yes }
+    IP address: { value: yes, noteRef: iamNeedsHostOverride }
+    User custom domain (CNAME alias): { value: yes, noteRef: iamNeedsHostOverride }
   initialConnection:
     Aurora Global Database Endpoint: { value: yes }
     Aurora Cluster Writer Endpoint: { value: yes }
@@ -310,7 +354,24 @@ crossPlugins:
   awsSecretsManager:
     failover2: { value: yes }
     gdbFailover: { value: yes }
-    iam: { value: no, note: "Two authentication plugins both trying to set the connection credential; only one authentication plugin may be active at a time." }
+    iam: { value: no, noteRef: oneAuthPlugin }
+  federatedAuth:
+    failover2: { value: yes }
+    gdbFailover: { value: yes }
+    customEndpoint: { value: yes }
+    initialConnection: { value: yes }
+    bg: { value: yes }
+    iam: { value: no, noteRef: oneAuthPlugin }
+    awsSecretsManager: { value: no, noteRef: oneAuthPlugin }
+  oktaAuth:
+    failover2: { value: yes }
+    gdbFailover: { value: yes }
+    customEndpoint: { value: yes }
+    initialConnection: { value: yes }
+    bg: { value: yes }
+    iam: { value: no, noteRef: oneAuthPlugin }
+    awsSecretsManager: { value: no, noteRef: oneAuthPlugin }
+    federatedAuth: { value: no, noteRef: oneAuthPlugin }
   customEndpoint:
     failover2: { value: yes }
     gdbFailover: { value: no, note: "Meaningless: a custom endpoint is a single-region Aurora cluster construct, while {plugin:gdbFailover} operates across regions on a global database." }

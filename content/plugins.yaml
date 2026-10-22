@@ -284,6 +284,384 @@ plugins:
             and on MySQL it is sent in cleartext.
 
   # =========================================================================
+  # Federated Authentication Plugin (AD FS)
+  # =========================================================================
+  federated-auth:
+    availableWrappers: [ruby]
+    intro: |
+      The Federated Authentication Plugin adds support for authenticating through a
+      federated identity provider — [Microsoft Active Directory Federation Services
+      (AD FS)](https://learn.microsoft.com/en-us/windows-server/identity/active-directory-federation-services) —
+      and then connecting to the database with AWS IAM. The plugin signs in to AD FS,
+      obtains a SAML assertion, exchanges it for temporary AWS credentials, and uses
+      those credentials to generate an IAM authentication token for the connection.
+    code:
+      ruby: federated_auth
+    pluginGroup: auth
+    availableSince:
+      ruby: "1.1.0"
+    enableSnippet:
+      ruby: |
+        require 'aws_advanced_ruby_driver_wrapper/postgresql'
+
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          wrapper_plugins: "federated_auth",
+          db_user: "iam_user",
+          idp_endpoint: "adfs.example.com",
+          idp_username: "someFederatedUsername@example.com",
+          idp_password: "someFederatedPassword",
+          iam_role_arn: "arn:aws:iam::123456789012:role/adfs_example_iam_role",
+          iam_idp_arn: "arn:aws:iam::123456789012:saml-provider/adfs_example",
+          iam_region: "us-east-1",
+          sslmode: "verify-full",
+          sslrootcert: "/path/to/global-bundle.pem"
+        )
+    parameters:
+      - concept: dbUser
+        type: string
+        description: "The database username the generated IAM authentication token is minted for — the IAM-mapped database account the connection is made as."
+        spellings:
+          ruby: { name: db_user, required: "Yes", defaultNote: "—", example: "iam_user" }
+      - concept: idpEndpoint
+        type: string
+        description: "The host name of the AD FS identity provider used to authenticate."
+        spellings:
+          ruby: { name: idp_endpoint, required: "Yes", defaultNote: "—", example: "adfs.example.com" }
+      - concept: idpUsername
+        type: string
+        description: "The username used to sign in to the identity provider. If not set, the plugin falls back to the connection `user`/`username`."
+        spellings:
+          ruby: { name: idp_username, required: "No", defaultNote: "connection user", example: "someFederatedUsername@example.com" }
+      - concept: idpPassword
+        type: string
+        description: "The password used to sign in to the identity provider. If not set, the plugin falls back to the connection `password`."
+        spellings:
+          ruby: { name: idp_password, required: "No", defaultNote: "connection password", example: "someFederatedPassword" }
+      - concept: idpPort
+        type: integer
+        description: "The port the AD FS host listens on, used to build the sign-on URL."
+        spellings:
+          ruby: { name: idp_port, required: "No", default: "443", example: "443" }
+      - concept: rpIdentifier
+        type: string
+        description: "The relying-party identifier sent to AD FS when requesting the SAML assertion."
+        spellings:
+          ruby: { name: rp_identifier, required: "No", default: "urn:amazon:webservices", example: "urn:amazon:webservices" }
+      - concept: iamRoleArn
+        type: string
+        description: "The ARN of the IAM role assumed through the SAML assertion to obtain temporary AWS credentials."
+        spellings:
+          ruby: { name: iam_role_arn, required: "Yes", defaultNote: "—", example: "arn:aws:iam::123456789012:role/adfs_example_iam_role" }
+      - concept: iamIdpArn
+        type: string
+        description: "The ARN of the SAML identity provider registered in AWS IAM."
+        spellings:
+          ruby: { name: iam_idp_arn, required: "Yes", defaultNote: "—", example: "arn:aws:iam::123456789012:saml-provider/adfs_example" }
+      - concept: iamRegion
+        type: string
+        description: "Overrides the AWS region used to generate the IAM token. By default it is parsed from the connection host."
+        spellings:
+          ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
+      - concept: iamHost
+        type: string
+        description: "Overrides the host used to generate the IAM token. By default it is derived from the connection host."
+        spellings:
+          ruby: { name: iam_host, required: "No", defaultNote: "derived from host", example: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com" }
+      - concept: iamPort
+        type: integer
+        description: "Overrides the port used to generate the IAM token. By default it is taken from the connection, or the dialect's default port."
+        spellings:
+          ruby: { name: iam_port, required: "No", defaultNote: "dialect default", example: "5432" }
+      - concept: iamExpiration
+        type: float
+        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected. The token cache is shared with the `iam` and `okta` plugins."
+        spellings:
+          ruby: { name: iam_expiration_sec, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
+      - concept: sslInsecure
+        type: boolean
+        description: "When `true`, disables TLS certificate verification on the HTTPS requests the plugin makes to the identity provider. Intended for development only."
+        spellings:
+          ruby: { name: ssl_insecure, required: "No", default: "false", example: "true" }
+      - concept: httpClientSocketTimeout
+        type: float
+        description: "Read (socket) timeout for the HTTPS requests the plugin makes to the identity provider."
+        spellings:
+          ruby: { name: http_client_socket_timeout_sec, required: "No", default: "60.0", unit: s, example: "60.0" }
+      - concept: httpClientConnectTimeout
+        type: float
+        description: "Connect timeout for the HTTPS requests the plugin makes to the identity provider."
+        spellings:
+          ruby: { name: http_client_connect_timeout_sec, required: "No", default: "60.0", unit: s, example: "60.0" }
+    prereqCount:
+      ruby: 1
+    wrapperOnly:
+      ruby:
+        - |
+          ## Prerequisites
+
+          :::warning
+          This plugin requires the AWS SDK for RDS. Add it to your Gemfile:
+
+          ```ruby
+          gem 'aws-sdk-rds'
+          ```
+          :::
+
+          The plugin signs in to your identity provider over HTTPS using Ruby's standard
+          library HTTP client, so no additional SAML or XML parsing gem is required. It
+          obtains AWS credentials from the SAML assertion through AWS STS
+          `AssumeRoleWithSAML`; it does not read `aws_credentials_provider` or the AWS SDK
+          default credential provider chain.
+
+          Before using the plugin, enable IAM database authentication on your database,
+          create an [IAM SAML identity provider](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_saml.html)
+          and an IAM role granting `rds-db:connect`, and create a database account mapped
+          to IAM:
+
+          - MySQL: `CREATE USER iam_user IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';`
+          - PostgreSQL: `CREATE USER iam_user; GRANT rds_iam TO iam_user;`
+        - |
+          ## Use TLS/SSL with federated authentication
+
+          :::warning
+          Use a **TLS/SSL 1.2+ connection**. The plugin injects the generated IAM token as
+          the connection password, and TLS ensures it is encrypted in transit.
+          :::
+
+          **PostgreSQL (`pg`):** set `sslmode: "verify-full"` and point `sslrootcert` at the
+          [AWS global certificate bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html).
+
+          ```ruby
+          AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+            host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+            wrapper_plugins: "federated_auth",
+            db_user: "iam_user",
+            idp_endpoint: "adfs.example.com",
+            idp_username: "someFederatedUsername@example.com",
+            idp_password: "someFederatedPassword",
+            iam_role_arn: "arn:aws:iam::123456789012:role/adfs_example_iam_role",
+            iam_idp_arn: "arn:aws:iam::123456789012:saml-provider/adfs_example",
+            iam_region: "us-east-1",
+            sslmode: "verify-full",
+            sslrootcert: "/path/to/global-bundle.pem"
+          )
+          ```
+
+          **MySQL (`mysql2`):** set `ssl_mode: "verify_identity"`, point `sslca` at the
+          global certificate bundle, and set `enable_cleartext_plugin: true`. RDS/Aurora
+          MySQL IAM authentication relies on the MySQL `mysql_clear_password` client plugin
+          because the token must be sent to the server in cleartext; the wrapper does
+          **not** set this for you.
+
+          ```ruby
+          AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
+            host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+            wrapper_plugins: "federated_auth",
+            db_user: "iam_user",
+            idp_endpoint: "adfs.example.com",
+            idp_username: "someFederatedUsername@example.com",
+            idp_password: "someFederatedPassword",
+            iam_role_arn: "arn:aws:iam::123456789012:role/adfs_example_iam_role",
+            iam_idp_arn: "arn:aws:iam::123456789012:saml-provider/adfs_example",
+            iam_region: "us-east-1",
+            enable_cleartext_plugin: true,
+            sslca: "/path/to/global-bundle.pem",
+            ssl_mode: "verify_identity"
+          )
+          ```
+
+          For the full picture, see [Configuring TLS/SSL](../configuring-tls).
+
+  # =========================================================================
+  # Okta Authentication Plugin
+  # =========================================================================
+  okta-auth:
+    availableWrappers: [ruby]
+    intro: |
+      The Okta Authentication Plugin adds support for authenticating through
+      [Okta](https://www.okta.com/) as the federated identity provider and then
+      connecting to the database with AWS IAM. The plugin signs in to Okta, obtains a
+      SAML assertion for the configured AWS application, exchanges it for temporary AWS
+      credentials, and uses those credentials to generate an IAM authentication token
+      for the connection.
+    code:
+      ruby: okta
+    pluginGroup: auth
+    availableSince:
+      ruby: "1.1.0"
+    enableSnippet:
+      ruby: |
+        require 'aws_advanced_ruby_driver_wrapper/postgresql'
+
+        conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+          host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+          wrapper_plugins: "okta",
+          db_user: "iam_user",
+          idp_endpoint: "my-org.okta.com",
+          idp_username: "someFederatedUsername@example.com",
+          idp_password: "someFederatedPassword",
+          app_id: "0oa1b2c3d4EXAMPLE",
+          iam_role_arn: "arn:aws:iam::123456789012:role/okta_example_iam_role",
+          iam_idp_arn: "arn:aws:iam::123456789012:saml-provider/okta_example",
+          iam_region: "us-east-1",
+          sslmode: "verify-full",
+          sslrootcert: "/path/to/global-bundle.pem"
+        )
+    parameters:
+      - concept: dbUser
+        type: string
+        description: "The database username the generated IAM authentication token is minted for — the IAM-mapped database account the connection is made as."
+        spellings:
+          ruby: { name: db_user, required: "Yes", defaultNote: "—", example: "iam_user" }
+      - concept: idpEndpoint
+        type: string
+        description: "The host name of your Okta organization used to authenticate."
+        spellings:
+          ruby: { name: idp_endpoint, required: "Yes", defaultNote: "—", example: "my-org.okta.com" }
+      - concept: idpUsername
+        type: string
+        description: "The username used to sign in to the identity provider. If not set, the plugin falls back to the connection `user`/`username`."
+        spellings:
+          ruby: { name: idp_username, required: "No", defaultNote: "connection user", example: "someFederatedUsername@example.com" }
+      - concept: idpPassword
+        type: string
+        description: "The password used to sign in to the identity provider. If not set, the plugin falls back to the connection `password`."
+        spellings:
+          ruby: { name: idp_password, required: "No", defaultNote: "connection password", example: "someFederatedPassword" }
+      - concept: appId
+        type: string
+        description: "The identifier of the AWS application configured in Okta."
+        spellings:
+          ruby: { name: app_id, required: "Yes", defaultNote: "—", example: "0oa1b2c3d4EXAMPLE" }
+      - concept: iamRoleArn
+        type: string
+        description: "The ARN of the IAM role assumed through the SAML assertion to obtain temporary AWS credentials."
+        spellings:
+          ruby: { name: iam_role_arn, required: "Yes", defaultNote: "—", example: "arn:aws:iam::123456789012:role/okta_example_iam_role" }
+      - concept: iamIdpArn
+        type: string
+        description: "The ARN of the SAML identity provider registered in AWS IAM."
+        spellings:
+          ruby: { name: iam_idp_arn, required: "Yes", defaultNote: "—", example: "arn:aws:iam::123456789012:saml-provider/okta_example" }
+      - concept: iamRegion
+        type: string
+        description: "Overrides the AWS region used to generate the IAM token. By default it is parsed from the connection host."
+        spellings:
+          ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
+      - concept: iamHost
+        type: string
+        description: "Overrides the host used to generate the IAM token. By default it is derived from the connection host."
+        spellings:
+          ruby: { name: iam_host, required: "No", defaultNote: "derived from host", example: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com" }
+      - concept: iamPort
+        type: integer
+        description: "Overrides the port used to generate the IAM token. By default it is taken from the connection, or the dialect's default port."
+        spellings:
+          ruby: { name: iam_port, required: "No", defaultNote: "dialect default", example: "5432" }
+      - concept: iamExpiration
+        type: float
+        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected. The token cache is shared with the `iam` and `federated_auth` plugins."
+        spellings:
+          ruby: { name: iam_expiration_sec, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
+      - concept: sslInsecure
+        type: boolean
+        description: "When `true`, disables TLS certificate verification on the HTTPS requests the plugin makes to the identity provider. Intended for development only."
+        spellings:
+          ruby: { name: ssl_insecure, required: "No", default: "false", example: "true" }
+      - concept: httpClientSocketTimeout
+        type: float
+        description: "Read (socket) timeout for the HTTPS requests the plugin makes to the identity provider."
+        spellings:
+          ruby: { name: http_client_socket_timeout_sec, required: "No", default: "60.0", unit: s, example: "60.0" }
+      - concept: httpClientConnectTimeout
+        type: float
+        description: "Connect timeout for the HTTPS requests the plugin makes to the identity provider."
+        spellings:
+          ruby: { name: http_client_connect_timeout_sec, required: "No", default: "60.0", unit: s, example: "60.0" }
+    prereqCount:
+      ruby: 1
+    wrapperOnly:
+      ruby:
+        - |
+          ## Prerequisites
+
+          :::warning
+          This plugin requires the AWS SDK for RDS. Add it to your Gemfile:
+
+          ```ruby
+          gem 'aws-sdk-rds'
+          ```
+          :::
+
+          The plugin signs in to Okta over HTTPS using Ruby's standard library HTTP
+          client, so no additional SAML or XML parsing gem is required. It obtains AWS
+          credentials from the SAML assertion through AWS STS `AssumeRoleWithSAML`; it
+          does not read `aws_credentials_provider` or the AWS SDK default credential
+          provider chain.
+
+          Before using the plugin, enable IAM database authentication on your database,
+          [configure Okta as an AWS identity provider](https://help.okta.com/en-us/content/topics/deploymentguides/aws/aws-deployment.htm),
+          create the matching IAM SAML identity provider and an IAM role granting
+          `rds-db:connect`, and create a database account mapped to IAM:
+
+          - MySQL: `CREATE USER iam_user IDENTIFIED WITH AWSAuthenticationPlugin AS 'RDS';`
+          - PostgreSQL: `CREATE USER iam_user; GRANT rds_iam TO iam_user;`
+        - |
+          ## Use TLS/SSL with Okta authentication
+
+          :::warning
+          Use a **TLS/SSL 1.2+ connection**. The plugin injects the generated IAM token as
+          the connection password, and TLS ensures it is encrypted in transit.
+          :::
+
+          **PostgreSQL (`pg`):** set `sslmode: "verify-full"` and point `sslrootcert` at the
+          [AWS global certificate bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html).
+
+          ```ruby
+          AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
+            host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+            wrapper_plugins: "okta",
+            db_user: "iam_user",
+            idp_endpoint: "my-org.okta.com",
+            idp_username: "someFederatedUsername@example.com",
+            idp_password: "someFederatedPassword",
+            app_id: "0oa1b2c3d4EXAMPLE",
+            iam_role_arn: "arn:aws:iam::123456789012:role/okta_example_iam_role",
+            iam_idp_arn: "arn:aws:iam::123456789012:saml-provider/okta_example",
+            iam_region: "us-east-1",
+            sslmode: "verify-full",
+            sslrootcert: "/path/to/global-bundle.pem"
+          )
+          ```
+
+          **MySQL (`mysql2`):** set `ssl_mode: "verify_identity"`, point `sslca` at the
+          global certificate bundle, and set `enable_cleartext_plugin: true`. RDS/Aurora
+          MySQL IAM authentication relies on the MySQL `mysql_clear_password` client plugin
+          because the token must be sent to the server in cleartext; the wrapper does
+          **not** set this for you.
+
+          ```ruby
+          AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
+            host: "my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com",
+            wrapper_plugins: "okta",
+            db_user: "iam_user",
+            idp_endpoint: "my-org.okta.com",
+            idp_username: "someFederatedUsername@example.com",
+            idp_password: "someFederatedPassword",
+            app_id: "0oa1b2c3d4EXAMPLE",
+            iam_role_arn: "arn:aws:iam::123456789012:role/okta_example_iam_role",
+            iam_idp_arn: "arn:aws:iam::123456789012:saml-provider/okta_example",
+            iam_region: "us-east-1",
+            enable_cleartext_plugin: true,
+            sslca: "/path/to/global-bundle.pem",
+            ssl_mode: "verify_identity"
+          )
+          ```
+
+          For the full picture, see [Configuring TLS/SSL](../configuring-tls).
+
+  # =========================================================================
   # AWS Secrets Manager Plugin
   # =========================================================================
   aws-secrets-manager:

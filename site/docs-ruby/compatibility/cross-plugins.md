@@ -18,18 +18,29 @@ This is a lower-triangular matrix: **each plugin pair is shown only once.** To k
 | [`gdb_failover`](../using-plugins/gdb-failover) | ❌ [^1] | ❌ [^2] | — |  | 
 | [`iam`](../using-plugins/iam-authentication) | ✅ | ✅ | ✅ | — | 
 | [`secrets_manager`](../using-plugins/aws-secrets-manager) | ✅ | ✅ | ✅ | ❌ [^3] | 
+| [`federated_auth`](../using-plugins/federated-auth) | ✅ | ✅ | ✅ | ❌ [^3] | 
+| [`okta`](../using-plugins/okta-auth) | ✅ | ✅ | ✅ | ❌ [^3] | 
 | [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ✅ | 
 | [`bg`](../using-plugins/blue-green) | ❌ [^4] | ✅ | ❌ [^5] | ✅ | 
 | [`kms_encryption`](../using-plugins/kms-encryption) | ✅ | ✅ | ✅ | ✅ | 
 
-**Columns: `secrets_manager`, `initial_connection`, `bg`, `kms_encryption`**
+**Columns: `secrets_manager`, `federated_auth`, `okta`, `initial_connection`**
 
-| Plugin | `secrets_manager` | `initial_connection` | `bg` | `kms_encryption` | 
+| Plugin | `secrets_manager` | `federated_auth` | `okta` | `initial_connection` | 
 | --- | --- | --- | --- | --- | 
 | [`secrets_manager`](../using-plugins/aws-secrets-manager) | — |  |  |  | 
-| [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | — |  |  | 
-| [`bg`](../using-plugins/blue-green) | ✅ | ✅ | — |  | 
-| [`kms_encryption`](../using-plugins/kms-encryption) | ✅ | ✅ | ✅ | — | 
+| [`federated_auth`](../using-plugins/federated-auth) | ❌ [^3] | — |  |  | 
+| [`okta`](../using-plugins/okta-auth) | ❌ [^3] | ❌ [^3] | — |  | 
+| [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | — | 
+| [`bg`](../using-plugins/blue-green) | ✅ | ✅ | ✅ | ✅ | 
+| [`kms_encryption`](../using-plugins/kms-encryption) | ✅ | ✅ | ✅ | ✅ | 
+
+**Columns: `bg`, `kms_encryption`**
+
+| Plugin | `bg` | `kms_encryption` | 
+| --- | --- | --- | 
+| [`bg`](../using-plugins/blue-green) | — |  | 
+| [`kms_encryption`](../using-plugins/kms-encryption) | ✅ | — | 
 
 ## Notes
 
@@ -37,7 +48,7 @@ This is a lower-triangular matrix: **each plugin pair is shown only once.** To k
 
 [^2]: Both drive cluster failover; `gdb_failover` is the region-aware superset, so running both means two components contend over reconnection and topology.
 
-[^3]: Two authentication plugins both trying to set the connection credential; only one authentication plugin may be active at a time.
+[^3]: Only one authentication plugin may be enabled per connection. The `iam`, `secrets_manager`, `federated_auth`, and `okta` plugins each set the connection credential, so enabling more than one conflicts.
 
 [^4]: Meaningless: a Blue/Green switchover replaces the whole deployment, so a custom endpoint's hand-picked instance subset does not carry over.
 

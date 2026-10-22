@@ -1,0 +1,78 @@
+---
+title: {{ page_title }}
+---
+
+{{ plugin.intro }}
+
+:::info Available since
+Version {{ plugin.availableSince }}
+:::
+
+{% include "partials/plugin-exclusivity-banner.md.j2" %}
+
+## What is federated identity
+
+Federated identity lets users authenticate once with an external identity provider (IdP) and use that single identity to reach services across organizations. The IdP authenticates the user and issues a signed security token — a SAML assertion — and any service provider that trusts the IdP accepts that assertion instead of managing its own credentials.
+
+This plugin applies that flow to database access. It signs in to your IdP with the configured credentials, receives a SAML assertion, exchanges the assertion for temporary AWS credentials through AWS STS `AssumeRoleWithSAML`, and uses those credentials to generate an AWS IAM authentication token. That IAM token is what the plugin uses to connect, so **AWS IAM database authentication must be enabled** on the target database.
+{% for block in prerequisites %}
+
+{{ block }}
+{% endfor %}
+
+## How to enable
+
+The plugin depends on AWS IAM database authentication: after it obtains a SAML assertion from your IdP, the assertion is exchanged for an AWS IAM authentication token, which is then used to connect to the database. Before enabling the plugin:
+
+1. [Enable IAM database authentication](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.IAMDBAuth.html) on your RDS or Aurora database.
+2. Set up an [IAM SAML identity provider](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_saml.html) and an IAM role whose policy grants `rds-db:connect`, then federate your IdP into that AWS account.
+
+Then add the plugin code `{{ plugin.code }}` to the `{{ wrapper.pluginListParam }}` parameter and set the parameters required for your environment.
+
+```{{ wrapper.codeLang }}
+{{ plugin.enableSnippet }}
+```
+
+Verify plugin compatibility within your {{ wrapper.label }} configuration using the [compatibility guide]({{ wrapper.compatibilityGuide }}).
+
+## Configuration parameters
+
+{% include "partials/plugin-parameters.md.j2" %}
+
+## Using this plugin with Global Databases
+
+When connecting to an
+[Amazon Aurora Global Database](https://aws.amazon.com/rds/aurora/global-database/),
+the IAM role assumed through the SAML assertion requires the additional
+`rds:DescribeGlobalClusters` permission so the plugin can resolve the writer
+region before generating the IAM token.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds-db:connect",
+                "rds:DescribeGlobalClusters"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+When you connect through an **Aurora Global Database endpoint**, also enable the
+[Initial Connection Strategy plugin](./initial-connection-strategy)
+(`initial_connection`). A global endpoint carries no region and points at
+whichever regional cluster is currently the primary, so it must be resolved to the
+writer instance before the IAM token is generated.
+
+For a global **writer** cluster, set `iam_region` explicitly when you can. Without
+it, the plugin must perform one extra sign-in to your identity provider up front to
+obtain the credentials needed to look up the writer region.
+{% for block in wrapper_only %}
+
+{{ block }}
+{% endfor %}

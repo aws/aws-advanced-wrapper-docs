@@ -38,19 +38,16 @@ bundle install
 Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
 
 :::warning
-On Ruby 3.4 or later, also add these to your Gemfile:
+If you are using Ruby 3.4 or later, and are not using Active Record, also add these to your Gemfile:
 
 ```ruby
 gem 'base64'
 gem 'bigdecimal'
-gem 'fiddle'
 gem 'logger'
 ```
 
-Ruby 3.4 removed all four from the default gems. The wrapper requires
-them when it loads but does not declare them, so a bundle without them
-raises `LoadError` on the first require. Outside a bundle they are
-usually already installed.
+Ruby 3.4 removed these from the default gems, so a bundle without them
+raises `LoadError` on the first require.
 :::
 
 
@@ -60,7 +57,30 @@ The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`, which are
 
 Bundler requires the gem for you. In a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'` first: that single require is what registers both adapters, and without it Active Record reports `aws_postgresql` as a nonexistent adapter.
 
-Change the adapter name and point the host at your cluster endpoint:
+If you are starting without a Rails application, this is a complete program. Save it as `main.rb` and run it:
+
+```ruby
+# main.rb
+require 'active_record'
+require 'aws_advanced_ruby_driver_wrapper'
+
+ActiveRecord::Base.establish_connection(
+  adapter: 'aws_postgresql',
+  host: 'my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com',
+  database: 'mydb',
+  username: '<username>',
+  password: '<password>',
+  wrapper_plugins: 'failover'
+)
+
+puts ActiveRecord::Base.connection.select_value('SELECT version()')
+```
+
+```bash
+bundle exec ruby main.rb
+```
+
+In a Rails application the same keys go in `config/database.yml` instead, and Bundler has already done the require. The adapter name is the only key that changes; leave the host as whichever endpoint you already connect to:
 
 ```yaml
 # config/database.yml
@@ -72,7 +92,7 @@ production:
   password: <password>
 ```
 
-That is the whole change — no application code moves, and connections made through this adapter already recover when the cluster promotes a new writer. Wrapper properties go alongside the Active Record keys:
+That is the whole change — no application code moves, and connections made through this adapter already recover when the cluster promotes a new writer. Wrapper properties go alongside the Active Record keys, under the same connection:
 
 ```yaml
 production:
@@ -101,7 +121,7 @@ Read it from the environment with `ENV.fetch('PGPASSWORD')`, or have
 AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
 `password:` key, as described on
 [AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a
-database user with no password at all, add `iam` instead; see
+database user with no password at all, consider using `iam` instead; see
 [IAM Authentication Plugin](using-plugins/iam-authentication).
 :::
 
@@ -135,18 +155,11 @@ end
 bundle exec ruby main.rb
 ```
 
-`require 'aws_advanced_ruby_driver_wrapper/postgresql'` is the PostgreSQL entry point; for MySQL use `require 'aws_advanced_ruby_driver_wrapper/mysql'` and `AwsAdvancedRubyDriverWrapper::WrapperMysql2Client`, which takes `database:` and `username:` where the PostgreSQL class takes `dbname:` and `user:`. Either class stands in for the driver's own (`PG::Connection`, `Mysql2::Client`): the calls your code already makes keep working, and the plugins act on each one.
-
-:::warning
-`exec` returns its result and does not yield to a block, unlike
-`PG::Connection#exec`. Use the return value as above.
-`conn.exec(sql) { |result| ... }` runs the query but never calls the
-block, so the result is silently discarded.
-:::
-
+For PostgreSQL, `require 'aws_advanced_ruby_driver_wrapper/postgresql'` and use `AwsAdvancedRubyDriverWrapper::WrapperPgConnection`, which stands in for `PG::Connection` and takes `dbname:` and `user:`. For MySQL, `require 'aws_advanced_ruby_driver_wrapper/mysql'` and use `AwsAdvancedRubyDriverWrapper::WrapperMysql2Client`, which stands in for `Mysql2::Client` and takes `database:` and `username:`. Either way the calls your code already makes keep working, and the plugins act on each one.
 
 ### Next
 
-Every wrapper property the example did not use is listed with its type, default and unit on the plugin page that reads it, starting with [Enhanced Failover Plugin](enhanced-failover). To check a combination before shipping, see [Plugin Compatibility](compatibility).
+The wrapper supports other plugins and wrapper properties. For further information see the plugin pages, starting with [Enhanced Failover Plugin](enhanced-failover). Every wrapper property the examples did not use is listed with its type, default and unit on the plugin page that reads it. To check a combination before shipping, see [Plugin Compatibility](compatibility).
 
 Not sure which plugins you need? [Set up by Scenario](setup) builds a configuration from a few questions about your application.
+

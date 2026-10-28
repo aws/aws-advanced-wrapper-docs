@@ -37,6 +37,19 @@ bundle install
 
 Bundler requires the gem for you (in a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'`). That single require registers the Active Record adapters and makes the connection classes, error classes, and other public API available for direct use.
 
+:::warning
+If you are using `mysql2` on Windows with Ruby 4.0 or later, also add `fiddle` to your Gemfile:
+
+```ruby
+gem 'fiddle'
+```
+
+On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` but does not
+declare it as a dependency. Ruby 4.0 removed `fiddle` from the default
+gems, so a bundle without it raises `LoadError` when `mysql2` is required.
+:::
+
+
 ### 2. Point Active Record at your cluster
 
 The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`, which are drop-in replacements for `postgresql` and `mysql2`. Change the adapter name and point the host at your cluster endpoint:

@@ -91,6 +91,20 @@ wrappers:
                 `require 'aws_advanced_ruby_driver_wrapper'`). That single require
                 registers the Active Record adapters and makes the connection classes,
                 error classes, and other public API available for direct use.
+            # The wrapper itself declares every gem it requires. This warning is
+            # for a gem `mysql2` requires on Windows without declaring it.
+            - text: |
+                :::warning
+                If you are using `mysql2` on Windows with Ruby 4.0 or later, also add `fiddle` to your Gemfile:
+
+                ```ruby
+                gem 'fiddle'
+                ```
+
+                On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` but does not
+                declare it as a dependency. Ruby 4.0 removed `fiddle` from the default
+                gems, so a bundle without it raises `LoadError` when `mysql2` is required.
+                :::
 
         - title: "2. Point Active Record at your cluster"
           blocks:

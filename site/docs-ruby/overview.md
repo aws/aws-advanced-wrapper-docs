@@ -38,16 +38,18 @@ bundle install
 Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
 
 :::warning
-If you are using Ruby 3.4 or later, and are not using Active Record, also add these to your Gemfile:
+Which extra gems your Gemfile needs depends on your Ruby version, your platform, and whether you are using Active Record:
 
-```ruby
-gem 'base64'
-gem 'bigdecimal'
-gem 'logger'
-```
+| Version | Using Active Record | Extra gems | Reason |
+| --- | --- | --- | --- |
+| Ruby 3.3 | Either | None | `base64`, `bigdecimal` and `logger` are all still default gems |
+| Ruby 3.4 | No | `base64`, `bigdecimal` | Ruby 3.4 removed both from the default gems |
+| Ruby 3.4 | Yes | None | Active Record declares both itself |
+| Ruby 4.0 or later | No | `base64`, `bigdecimal`, `logger` | Ruby 4.0 removed `logger` as well |
+| Ruby 4.0 or later | Yes | None | Active Record declares all three itself |
+| Ruby 4.0 or later, on Windows with `mysql2` | Either | `fiddle` | `mysql2` loads `libmysql.dll` through `fiddle` without declaring it, and neither does Active Record |
 
-Ruby 3.4 removed these from the default gems, so a bundle without them
-raises `LoadError` on the first require.
+A bundle missing any of them raises `LoadError` on the first require.
 :::
 
 

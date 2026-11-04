@@ -131,7 +131,7 @@ plugins:
           ruby: { name: iam_region, required: "No", defaultNote: "parsed from host", example: "us-east-1" }
       - concept: iamExpiration
         type: integer
-        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process, and its lifetime is set by the first connection that uses the IAM plugin; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected."
+        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process that uses the `iam`, `federated_auth`, or `okta` plugin, and its lifetime is set by the first such connection; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected."
         spellings:
           ruby: { name: iam_expiration_sec, type: float, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
       - concept: iamTokenProperty
@@ -277,8 +277,9 @@ plugins:
           fresh token and retries the connection once.
 
           :::note
-          The token cache is shared by every connection in the process, and the first
-          connection that uses the IAM plugin sets its `iam_expiration_sec`. Connections
+          The token cache is shared by every connection in the process that uses the
+          `iam`, `federated_auth`, or `okta` plugin, and the first such connection sets
+          its `iam_expiration_sec`. Connections
           opened later with a different value still use the first connection's value, so
           set `iam_expiration_sec` to the same value on every connection.
           :::
@@ -382,7 +383,7 @@ plugins:
           ruby: { name: iam_port, required: "No", defaultNote: "dialect default", example: "5432" }
       - concept: iamExpiration
         type: float
-        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected. The token cache is shared with the `iam` and `okta` plugins."
+        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process that uses the `iam`, `federated_auth`, or `okta` plugin, and its lifetime is set by the first such connection; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected."
         spellings:
           ruby: { name: iam_expiration_sec, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
       - concept: sslInsecure
@@ -568,7 +569,7 @@ plugins:
           ruby: { name: iam_port, required: "No", defaultNote: "dialect default", example: "5432" }
       - concept: iamExpiration
         type: float
-        description: "Fallback cache lifetime, in seconds, for a generated IAM token. A cached token normally lives for the lifetime signed into the token itself (15 minutes) minus a 60-second safety margin; this value is used only when that lifetime cannot be read from the token. It is capped at a maximum of `870.0` — the default — so a cached token is never used after it expires. A value greater than `870.0` or less than or equal to `0` is rejected. The token cache is shared with the `iam` and `federated_auth` plugins."
+        description: "Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process that uses the `iam`, `federated_auth`, or `okta` plugin, and its lifetime is set by the first such connection; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected."
         spellings:
           ruby: { name: iam_expiration_sec, required: "No", default: "870.0", unit: s, example: "600.0 (maximum 870.0)" }
       - concept: sslInsecure

@@ -38,18 +38,15 @@ bundle install
 Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
 
 :::warning
-Which extra gems your Gemfile needs depends on your Ruby version, your platform, and whether you are using Active Record:
+If you are using `mysql2` on Windows with Ruby 4.0 or later, also add `fiddle` to your Gemfile:
 
-| Version | Using Active Record | Extra gems | Reason |
-| --- | --- | --- | --- |
-| Ruby 3.3 | Either | None | `base64`, `bigdecimal` and `logger` are all still default gems |
-| Ruby 3.4 | No | `base64`, `bigdecimal` | Ruby 3.4 removed both from the default gems |
-| Ruby 3.4 | Yes | None | Active Record declares both itself |
-| Ruby 4.0 or later | No | `base64`, `bigdecimal`, `logger` | Ruby 4.0 removed `logger` as well |
-| Ruby 4.0 or later | Yes | None | Active Record declares all three itself |
-| Ruby 4.0 or later, on Windows with `mysql2` | Either | `fiddle` | `mysql2` loads `libmysql.dll` through `fiddle` without declaring it, and neither does Active Record |
+```ruby
+gem 'fiddle'
+```
 
-A bundle missing any of them raises `LoadError` on the first require.
+On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` but does not
+declare it as a dependency. Ruby 4.0 removed `fiddle` from the default
+gems, so a bundle without it raises `LoadError` when `mysql2` is required.
 :::
 
 

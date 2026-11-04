@@ -8,6 +8,15 @@ updates:
     labels:
       - "dependencies"
       - "javascript"
+    ignore:
+      # @mermaid-js/layout-elk is a dependency of @docusaurus/theme-mermaid, which
+      # requires ^0.1.9. A previous Dependabot PR bumped it which breaks `npm install`
+      # (ERESOLVE) and the Docusaurus build. Block major and minor bumps until
+      # theme-mermaid declares support for them. Remove this entry when that happens.
+      - dependency-name: "@mermaid-js/layout-elk"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     groups:
       site-minor-and-patch:
         patterns:

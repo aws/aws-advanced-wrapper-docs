@@ -38,15 +38,18 @@ bundle install
 Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
 
 :::warning
-If you are using `mysql2` on Windows with Ruby 4.0 or later, also add `fiddle` to your Gemfile:
+If you are using `mysql2` on Windows with Ruby 4.0 or later, you may also need to add `fiddle` to your Gemfile:
 
 ```ruby
 gem 'fiddle'
 ```
 
-On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` but does not
-declare it as a dependency. Ruby 4.0 removed `fiddle` from the default
-gems, so a bundle without it raises `LoadError` when `mysql2` is required.
+On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` when you set
+`RUBY_MYSQL2_LIBMYSQL_DLL`, when the gem ships its own `libmysql.dll`, or
+when Ruby was not installed with RubyInstaller, but it does not declare
+`fiddle` as a dependency. Ruby 4.0 removed `fiddle` from the default gems,
+so in those cases a bundle without it raises `LoadError` when `mysql2` is
+required.
 :::
 
 
@@ -56,7 +59,7 @@ The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`, which are
 
 Bundler requires the gem for you. In a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'` first: that single require is what registers both adapters, and without it Active Record reports `aws_postgresql` as a nonexistent adapter.
 
-If you are starting without a Rails application, this is a complete program. Save it as `main.rb` and run it:
+If you are starting without a Rails application, add `gem 'activerecord'` to the Gemfile from step 1 (outside Rails, nothing else installs it), run `bundle install`, and this is a complete program. Save it as `main.rb` and run it:
 
 ```ruby
 # main.rb
@@ -116,7 +119,8 @@ with the other, because both resolve under the same underlying adapter key.
 
 
 :::note Keeping the password out of your source
-Read it from the environment with `ENV.fetch('PGPASSWORD')`, or have
+Read it from the environment with `ENV.fetch('PGPASSWORD')` in Ruby, or
+`<%= ENV.fetch('PGPASSWORD') %>` in `config/database.yml`, or have
 AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
 `password:` key, as described on
 [AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a

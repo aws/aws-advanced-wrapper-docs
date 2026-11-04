@@ -193,9 +193,9 @@ fresh token and retries the connection once.
 :::note
 The token cache is shared by every connection in the process that uses the
 `iam`, `federated_auth`, or `okta` plugin, and the first such connection sets
-its `iam_expiration_sec`. Connections
-opened later with a different value still use the first connection's value, so
-set `iam_expiration_sec` to the same value on every connection.
+its `iam_expiration_sec`. Connections opened later with a different value still
+use the first connection's value, so set `iam_expiration_sec` to the same value
+on every connection.
 :::
 
 ## Related

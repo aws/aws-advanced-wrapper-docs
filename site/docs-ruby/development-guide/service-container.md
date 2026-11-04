@@ -155,9 +155,10 @@ background cleanup thread. Shared across the wrapper.
 **When to use it**
 
 Use it to cache data reused across the wrapper — for example the
-`RdsHostListProvider` caches cluster topology here. Reads publish a
-`DataAccessEvent` (unless `register_access: false`), which keeps related
-monitors alive.
+`RdsHostListProvider` caches cluster topology here. A read publishes a
+`DataAccessEvent` only when called with `register_access: true`, which
+extends the expiration of any monitor that produces that cache's data. Pass
+it only when the read should keep that monitor alive.
 
 ### Monitor Service
 

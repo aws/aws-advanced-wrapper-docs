@@ -18,6 +18,7 @@ switchover status and adjusting connection handling at each phase:
 - **During the active switchover**, it temporarily suspends calls to blue nodes and substitutes hostnames with the corresponding IP addresses to avoid stale DNS.
 - **After the switchover**, it monitors DNS until blue endpoints are reconfigured, then stops substituting.
 - **Once switchover completes**, it rejects new connections to green nodes.
+- **Once the switchover is confirmed**, it invalidates connections that were opened to the old blue environment before the switchover, so their next use raises an error instead of reading from retired blue nodes. See `bg_drop_blue_connections` below.
 - **If the switchover fails or rolls back**, it detects that and restores normal handling.
 
 
@@ -92,6 +93,7 @@ Verify plugin compatibility within your Ruby configuration using the [compatibil
 | `bg_increased_sec` | Float | No | `1.0` | Increased interval for checking Blue/Green Deployment status. Configure within 0.5–2 sec. *(sec)*<br/><br/>Example: `1.0` |
 | `bg_high_sec` | Float | No | `0.1` | High-frequency interval for checking Blue/Green Deployment status. Configure within 0.05–0.5 sec. *(sec)*<br/><br/>Example: `0.1` |
 | `bg_switchover_timeout_sec` | Float | No | `180.0` | Maximum duration allowed for switchover completion. If the process stalls or exceeds this, the wrapper assumes completion and resumes normal operations. *(sec)*<br/><br/>Example: `180.0` |
+| `bg_drop_blue_connections` | Boolean | No | `true` | Whether to invalidate connections that were opened to the old blue environment before a switchover. Once the switchover is confirmed (it reaches the `POST` or `COMPLETED` phase), each such connection is closed the next time it is used. With the failover plugin enabled, that use reconnects through Blue/Green routing and raises `FailoverSuccessError` (or `TransactionStateUnknownError` inside a transaction); without it, the driver raises its closed-connection error. Either way the application gets an explicit error instead of a stale read from the old blue environment. Connections are invalidated only if the plugin saw the switchover while it was in progress, and none are invalidated if the switchover rolls back.<br/><br/>Example: `false` |
 
 ## Configuring monitoring connections
 

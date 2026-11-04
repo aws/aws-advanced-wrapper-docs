@@ -231,6 +231,44 @@ discarding it, so you should not call `disconnect!` or discard the connection ob
 yourself — the pool already holds the live, reconnected connection.
 :::
 
+## Timeouts and idle connections on MySQL
+
+On MySQL, the failover plugin treats a connection that timed out or was closed by
+the server as lost, and fails over. This applies to `mysql2` (`WrapperMysql2Client`
+and `aws_mysql2`) and to `trilogy` (`WrapperTrilogyClient` and `aws_trilogy`), and
+includes:
+
+- A query that runs longer than the client's `read_timeout`. The driver closes the
+  socket before it raises the timeout, so the connection cannot be reused.
+- The first query on a connection that sat idle longer than the server's
+  `wait_timeout`. MySQL 8.0.24 and later closes such a connection and reports error
+  4031.
+- A connection lost during a query, or a server that has gone away (with `mysql2`,
+  errors 2006, 2013, and 2055).
+
+Your code then sees `FailoverSuccessError` (or `TransactionStateUnknownError` inside a
+transaction) instead of the driver's timeout or connection error. Through ActiveRecord
+these errors are re-raised unchanged (see [ActiveRecord integration](#activerecord-integration)),
+and ActiveRecord does not retry them for you. To avoid a failover that is caused by a
+slow query or an idle connection rather than by the database:
+
+- Set `read_timeout` higher than your slowest expected query.
+- Keep pooled connections from outliving `wait_timeout`: raise `wait_timeout` on the
+  server, or have the pool close idle connections sooner, for example with
+  ActiveRecord's `idle_timeout`.
+
+A lock wait timeout (error 1205) does not trigger failover. The connection is still
+healthy, and the driver's error is raised as usual.
+
+:::note Changed in 1.1.0
+Before 1.1.0, `mysql2` did not fail over on a `read_timeout` or on errors 4031 and
+2055. A `read_timeout` raised `Mysql2::Error::TimeoutError` (`ActiveRecord::AdapterTimeout`
+under `aws_mysql2`), and errors 4031 and 2055 were raised as is
+(`ActiveRecord::ConnectionFailed` under `aws_mysql2`, which ActiveRecord answered by
+reconnecting to the original endpoint and retrying the queries it considers
+retryable).
+:::
+
 ## ActiveRecord integration
 
 When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the

@@ -947,7 +947,7 @@
               "iam_region": "<your-region>"
             },
             "notes": [
-              "Tokens are cached for `iam_expiration_sec` seconds (default `870.0`), which sits just under the 15-minute token lifetime."
+              "Tokens are cached for up to `iam_expiration_sec` seconds, and never past 60 seconds before the 15-minute token lifetime ends, so with the default of `870.0` a token is reused for about 14 minutes."
             ],
             "assumes": [
               "IAM authentication is enabled on the cluster and the database user is mapped to an IAM role."

@@ -552,6 +552,15 @@ def _profile_cluster_id(page, wid, regs):
     return {"cluster_id": reg}
 
 
+def _profile_telemetry(page, wid, regs):
+    """Context for the Telemetry shared configuration page.
+
+    Exposes shared (wrapper-agnostic) prose plus wrapper-specific property
+    spellings, backends, setup code, and metric names.
+    """
+    return {"telemetry": regs["telemetry"]}
+
+
 CONTEXT_PROFILES = {
     "base": _profile_base,
     "failover": _profile_failover,
@@ -561,6 +570,7 @@ CONTEXT_PROFILES = {
     "plugins": _profile_plugins,
     "scenarios": _profile_scenarios,
     "cluster-id": _profile_cluster_id,
+    "telemetry": _profile_telemetry,
 }
 
 # Templates that imply a profile when a page omits `contextProfile`. Kept only
@@ -678,6 +688,7 @@ def main():
     plugins_reg = load("plugins.yaml")
     scenarios_reg = load("scenarios.yaml")
     cluster_id_reg = load("cluster-id.yaml")
+    telemetry_reg = load("telemetry.yaml")
     regs = {
         "failover": failover_reg,
         "devguide": devguide_reg,
@@ -685,6 +696,7 @@ def main():
         "plugins": plugins_reg,
         "scenarios": scenarios_reg,
         "cluster_id": cluster_id_reg,
+        "telemetry": telemetry_reg,
     }
 
     # Fail fast with friendly messages before rendering anything.

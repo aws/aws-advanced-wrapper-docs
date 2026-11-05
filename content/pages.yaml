@@ -219,6 +219,15 @@ pages:
     template: cluster-id
     contextProfile: cluster-id
 
+  - id: telemetry
+    path: telemetry
+    title: Telemetry
+    category: Shared Configuration
+    wrappers: [ruby]
+    parent: overview
+    template: telemetry
+    contextProfile: telemetry
+
   # ---------------------------------------------------------------------------
   # Compatibility guide. Each wrapper renders only its own plugins.
   # ---------------------------------------------------------------------------

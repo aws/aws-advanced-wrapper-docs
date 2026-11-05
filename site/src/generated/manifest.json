@@ -151,6 +151,15 @@
       "parentPath": "overview",
       "category": "Shared Configuration"
     },
+    "telemetry": {
+      "path": "telemetry",
+      "title": "Telemetry",
+      "wrappers": [
+        "ruby"
+      ],
+      "parentPath": "overview",
+      "category": "Shared Configuration"
+    },
     "compatibility": {
       "path": "compatibility",
       "title": "Plugin Compatibility",

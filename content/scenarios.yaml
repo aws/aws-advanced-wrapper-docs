@@ -66,13 +66,13 @@
 
 wrappers:
   ruby:
-    engineLabel: { pg: PostgreSQL, mysql: MySQL }
-    adapter: { pg: aws_postgresql, mysql: aws_mysql2 }
-    gem: { pg: pg, mysql: mysql2 }
-    requirePath: { pg: aws_advanced_ruby_driver_wrapper/postgresql, mysql: aws_advanced_ruby_driver_wrapper/mysql }
-    directClass: { pg: "AwsAdvancedRubyDriverWrapper::WrapperPgConnection", mysql: "AwsAdvancedRubyDriverWrapper::WrapperMysql2Client" }
-    standsIn: { pg: "PG::Connection", mysql: "Mysql2::Client" }
-    port: { pg: 5432, mysql: 3306 }
+    engineLabel: { pg: PostgreSQL, mysql: MySQL, trilogy: MySQL }
+    adapter: { pg: aws_postgresql, mysql: aws_mysql2, trilogy: aws_trilogy }
+    gem: { pg: pg, mysql: mysql2, trilogy: trilogy }
+    requirePath: { pg: aws_advanced_ruby_driver_wrapper/postgresql, mysql: aws_advanced_ruby_driver_wrapper/mysql, trilogy: aws_advanced_ruby_driver_wrapper/trilogy }
+    directClass: { pg: "AwsAdvancedRubyDriverWrapper::WrapperPgConnection", mysql: "AwsAdvancedRubyDriverWrapper::WrapperMysql2Client", trilogy: "AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient" }
+    standsIn: { pg: "PG::Connection", mysql: "Mysql2::Client", trilogy: "Trilogy" }
+    port: { pg: 5432, mysql: 3306, trilogy: 3306 }
 
 # -----------------------------------------------------------------------------
 # Links. Active Record concepts are linked, not explained. All Rails links point
@@ -134,7 +134,8 @@ axes:
     default: pg
     options:
       - { id: pg, label: PostgreSQL }
-      - { id: mysql, label: MySQL }
+      - { id: mysql, label: MySQL (mysql2) }
+      - { id: trilogy, label: MySQL (Trilogy) }
 
   - id: arVersion
     label: Active Record
@@ -175,7 +176,7 @@ questions:
         emit:
           links: [ar_multiple_databases]
       - id: direct
-        label: Through the pg or mysql2 gem directly
+        label: Through the pg, mysql2, or trilogy gem directly
         short: the gem directly
         hint: >
           The wrapper stands in for the gem's own connection class. There is no
@@ -354,24 +355,43 @@ rules:
   # --- dialect: stating it explicitly removes a class of wrong-guess surprises
   - when: { deployment: [cluster, cluster_custom, cluster_readonly], engine: [pg] }
     emit: { params: { wrapper_dialect: aurora-pg } }
-  - when: { deployment: [cluster, cluster_custom, cluster_readonly], engine: [mysql] }
+  - when: { deployment: [cluster, cluster_custom, cluster_readonly], engine: [mysql, trilogy] }
     emit: { params: { wrapper_dialect: aurora-mysql } }
   - when: { deployment: [global], engine: [pg] }
     emit: { params: { wrapper_dialect: global-aurora-pg } }
-  - when: { deployment: [global], engine: [mysql] }
+  - when: { deployment: [global], engine: [mysql, trilogy] }
     emit: { params: { wrapper_dialect: global-aurora-mysql } }
   - when: { deployment: [multi_az_cluster], engine: [pg] }
     emit: { params: { wrapper_dialect: multi-az-pg-cluster } }
-  - when: { deployment: [multi_az_cluster], engine: [mysql] }
+  - when: { deployment: [multi_az_cluster], engine: [mysql, trilogy] }
     emit: { params: { wrapper_dialect: multi-az-mysql-cluster } }
   - when: { deployment: [multi_az_instance, instance, proxy], engine: [pg] }
     emit: { params: { wrapper_dialect: rds-pg } }
-  - when: { deployment: [multi_az_instance, instance, proxy], engine: [mysql] }
+  - when: { deployment: [multi_az_instance, instance, proxy], engine: [mysql, trilogy] }
     emit: { params: { wrapper_dialect: rds-mysql } }
   - when: { deployment: [community], engine: [pg] }
     emit: { params: { wrapper_dialect: pg } }
-  - when: { deployment: [community], engine: [mysql] }
+  - when: { deployment: [community], engine: [mysql, trilogy] }
     emit: { params: { wrapper_dialect: mysql } }
+
+  # --- IAM authentication: the token travels as the password, so a few more
+  # settings are needed. On MySQL the token is only sent with the cleartext
+  # client plugin, so `enable_cleartext_plugin` is required there (not on
+  # PostgreSQL). TLS is not strictly required but strongly recommended on every
+  # engine, because the token is sent as the password (in cleartext on MySQL);
+  # the verification mode and CA-certificate key names differ per driver.
+  - when: { credentials: [iam], engine: [mysql, trilogy] }
+    from: "required on MySQL: the IAM token is sent via mysql_clear_password"
+    emit: { params: { enable_cleartext_plugin: true } }
+  - when: { credentials: [iam], engine: [pg] }
+    from: "recommended: encrypts the IAM token (sent as the password) in transit"
+    emit: { params: { sslmode: verify-full, sslrootcert: "<path/to/global-bundle.pem>" } }
+  - when: { credentials: [iam], engine: [mysql] }
+    from: "recommended: encrypts the IAM token (sent in cleartext) in transit"
+    emit: { params: { ssl_mode: verify_identity, sslca: "<path/to/global-bundle.pem>" } }
+  - when: { credentials: [iam], engine: [trilogy] }
+    from: "recommended: encrypts the IAM token (sent in cleartext) in transit"
+    emit: { params: { ssl_mode: verify_identity, ssl_ca: "<path/to/global-bundle.pem>" } }
 
   # --- resolving the cluster endpoint to a real instance at connect time
   - when: { continuity: [instance, region], deployment: [cluster, cluster_readonly, global, multi_az_cluster] }
@@ -600,6 +620,9 @@ addons:
     toggle: true
     label: Encrypt column values with AWS KMS
     short: column encryption
+    blockedIf:
+      - when: { engine: [trilogy] }
+        reason: kmsUnsupportedTrilogy
     emit:
       plugins: [kms_encryption]
       params:
@@ -798,6 +821,7 @@ labels:
   bgUnsupportedGlobal: "AWS does not support Blue/Green deployments with RDS Proxy on Aurora global databases, and the wrapper's Blue/Green plugin does not support global databases. Use a global switchover or failover instead."
   bgUnsupportedMultiAzCluster: "AWS Blue/Green deployments are not available for RDS Multi-AZ DB clusters (they are supported for Multi-AZ DB instance deployments)."
   bgUnsupportedCommunity: "Blue/Green deployments are an Amazon RDS/Aurora feature. A community database you run yourself cannot be set up with one."
+  kmsUnsupportedTrilogy: "The KMS Encryption Plugin relies on prepared statements, which Trilogy does not support, so it cannot be used with the Trilogy driver. Use the mysql2 driver for column encryption."
   resultHeading: Your configuration
   assumesHeading: What this assumes
   pluginsHeading: Why each plugin is here

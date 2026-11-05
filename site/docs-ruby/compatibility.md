@@ -20,4 +20,4 @@ Legend: ✅ compatible · ❌ not compatible · blank = no constraint recorded.
 
 These plugins record no database-type, endpoint, or cross-plugin constraints:
 
-- [`kms_encryption`](./using-plugins/kms-encryption) — Transparent column-level encryption using AWS KMS.
+- [`kms_encryption`](./using-plugins/kms-encryption) — Transparent column-level encryption using AWS KMS. Not supported with the `trilogy` driver (it has no prepared statements); use `mysql2` or `pg`.

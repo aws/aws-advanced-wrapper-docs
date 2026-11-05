@@ -3,31 +3,38 @@
   "meta": {
     "engineLabel": {
       "pg": "PostgreSQL",
-      "mysql": "MySQL"
+      "mysql": "MySQL",
+      "trilogy": "MySQL"
     },
     "adapter": {
       "pg": "aws_postgresql",
-      "mysql": "aws_mysql2"
+      "mysql": "aws_mysql2",
+      "trilogy": "aws_trilogy"
     },
     "gem": {
       "pg": "pg",
-      "mysql": "mysql2"
+      "mysql": "mysql2",
+      "trilogy": "trilogy"
     },
     "requirePath": {
       "pg": "aws_advanced_ruby_driver_wrapper/postgresql",
-      "mysql": "aws_advanced_ruby_driver_wrapper/mysql"
+      "mysql": "aws_advanced_ruby_driver_wrapper/mysql",
+      "trilogy": "aws_advanced_ruby_driver_wrapper/trilogy"
     },
     "directClass": {
       "pg": "AwsAdvancedRubyDriverWrapper::WrapperPgConnection",
-      "mysql": "AwsAdvancedRubyDriverWrapper::WrapperMysql2Client"
+      "mysql": "AwsAdvancedRubyDriverWrapper::WrapperMysql2Client",
+      "trilogy": "AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient"
     },
     "standsIn": {
       "pg": "PG::Connection",
-      "mysql": "Mysql2::Client"
+      "mysql": "Mysql2::Client",
+      "trilogy": "Trilogy"
     },
     "port": {
       "pg": 5432,
-      "mysql": 3306
+      "mysql": 3306,
+      "trilogy": 3306
     }
   },
   "links": {
@@ -229,6 +236,7 @@
     "bgUnsupportedGlobal": "AWS does not support Blue/Green deployments with RDS Proxy on Aurora global databases, and the wrapper's Blue/Green plugin does not support global databases. Use a global switchover or failover instead.",
     "bgUnsupportedMultiAzCluster": "AWS Blue/Green deployments are not available for RDS Multi-AZ DB clusters (they are supported for Multi-AZ DB instance deployments).",
     "bgUnsupportedCommunity": "Blue/Green deployments are an Amazon RDS/Aurora feature. A community database you run yourself cannot be set up with one.",
+    "kmsUnsupportedTrilogy": "The KMS Encryption Plugin relies on prepared statements, which Trilogy does not support, so it cannot be used with the Trilogy driver. Use the mysql2 driver for column encryption.",
     "resultHeading": "Your configuration",
     "assumesHeading": "What this assumes",
     "pluginsHeading": "Why each plugin is here",
@@ -280,7 +288,8 @@
           "cluster_readonly"
         ],
         "engine": [
-          "mysql"
+          "mysql",
+          "trilogy"
         ]
       },
       "emit": {
@@ -310,7 +319,8 @@
           "global"
         ],
         "engine": [
-          "mysql"
+          "mysql",
+          "trilogy"
         ]
       },
       "emit": {
@@ -340,7 +350,8 @@
           "multi_az_cluster"
         ],
         "engine": [
-          "mysql"
+          "mysql",
+          "trilogy"
         ]
       },
       "emit": {
@@ -374,7 +385,8 @@
           "proxy"
         ],
         "engine": [
-          "mysql"
+          "mysql",
+          "trilogy"
         ]
       },
       "emit": {
@@ -404,12 +416,81 @@
           "community"
         ],
         "engine": [
-          "mysql"
+          "mysql",
+          "trilogy"
         ]
       },
       "emit": {
         "params": {
           "wrapper_dialect": "mysql"
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "mysql",
+          "trilogy"
+        ]
+      },
+      "from": "required on MySQL: the IAM token is sent via mysql_clear_password",
+      "emit": {
+        "params": {
+          "enable_cleartext_plugin": true
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "pg"
+        ]
+      },
+      "from": "recommended: encrypts the IAM token (sent as the password) in transit",
+      "emit": {
+        "params": {
+          "sslmode": "verify-full",
+          "sslrootcert": "<path/to/global-bundle.pem>"
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "mysql"
+        ]
+      },
+      "from": "recommended: encrypts the IAM token (sent in cleartext) in transit",
+      "emit": {
+        "params": {
+          "ssl_mode": "verify_identity",
+          "sslca": "<path/to/global-bundle.pem>"
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "trilogy"
+        ]
+      },
+      "from": "recommended: encrypts the IAM token (sent in cleartext) in transit",
+      "emit": {
+        "params": {
+          "ssl_mode": "verify_identity",
+          "ssl_ca": "<path/to/global-bundle.pem>"
         }
       }
     },
@@ -599,7 +680,11 @@
         },
         {
           "id": "mysql",
-          "label": "MySQL"
+          "label": "MySQL (mysql2)"
+        },
+        {
+          "id": "trilogy",
+          "label": "MySQL (Trilogy)"
         }
       ]
     },
@@ -644,7 +729,7 @@
         },
         {
           "id": "direct",
-          "label": "Through the pg or mysql2 gem directly",
+          "label": "Through the pg, mysql2, or trilogy gem directly",
           "short": "the gem directly",
           "hint": "The wrapper stands in for the gem's own connection class. There is no pool and no role concept, so both are yours to build.\n",
           "emit": {
@@ -1194,6 +1279,16 @@
       "toggle": true,
       "label": "Encrypt column values with AWS KMS",
       "short": "column encryption",
+      "blockedIf": [
+        {
+          "when": {
+            "engine": [
+              "trilogy"
+            ]
+          },
+          "reason": "kmsUnsupportedTrilogy"
+        }
+      ],
       "emit": {
         "plugins": [
           "kms_encryption"

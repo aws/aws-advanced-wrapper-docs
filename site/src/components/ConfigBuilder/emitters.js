@@ -242,6 +242,15 @@ function directArgs(config, ctx, { reader }) {
       lines.push({ text: "  failover_mode: 'strict-reader'", why: 'readers only' });
       return;
     }
+    // The Trilogy driver's direct client takes ssl_mode as an integer constant
+    // (Trilogy::SSL_VERIFY_IDENTITY), not a string — a string or symbol raises
+    // TypeError. The aws_trilogy ActiveRecord adapter accepts the string names,
+    // so this applies only to the direct client.
+    if (engine === 'trilogy' && key === 'ssl_mode') {
+      const constant = `Trilogy::SSL_${String(cfg.params[key].value).toUpperCase()}`;
+      lines.push({ text: `  ${key}: ${constant}`, why: cfg.params[key].from });
+      return;
+    }
     lines.push({ text: `  ${key}: ${rubyValue(cfg.params[key].value)}`, why: cfg.params[key].from });
   });
   return lines;

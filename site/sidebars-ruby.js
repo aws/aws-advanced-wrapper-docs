@@ -30,7 +30,8 @@ const sidebars = {
         "configuring-tls",
         "aws-credentials",
         "host-selection-strategies",
-        "cluster-id"
+        "cluster-id",
+        "telemetry"
       ],
     },
     {

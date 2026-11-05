@@ -1,0 +1,76 @@
+---
+title: {{ page_title }}
+---
+{% set tw = telemetry.wrappers[wrapper_id] %}
+{{ telemetry.shared.overview }}
+
+:::info Available since
+Version {{ tw.availableSince }}
+:::
+
+## Traces and metrics
+
+The {{ wrapper.wrapperName }} provides telemetry in two forms: **traces** and **metrics**.
+
+### Traces
+
+{{ telemetry.shared.tracesIntro }}
+
+### Metrics
+
+{{ telemetry.shared.metricsIntro }}
+
+## Where the data goes
+
+{{ telemetry.shared.collectorIntro }}
+
+## Enabling telemetry
+
+{{ tw.enableIntro }}
+
+{{ tw.enableBlock }}
+
+### Install the OpenTelemetry gems
+
+{{ tw.gemsBlock }}
+
+### Set up the OpenTelemetry SDK
+
+The {{ wrapper.wrapperName }} records telemetry through the OpenTelemetry API; your
+application owns the SDK that exports it. Both traces and metrics are exported over
+OTLP (the supported backends are {{ tw.tracesBackends }} for traces and
+{{ tw.metricsBackends }} for metrics). The wrapper registers its tracer and meter
+under the instrumentation scope `{{ tw.instrumentationScope }}`.
+
+{{ tw.sdkSetup }}
+
+## Configuration parameters
+
+{% set params = tw.parameters %}
+{% include "partials/plugin-parameters.md.j2" %}
+
+## Top-level and nested traces
+
+{{ telemetry.shared.topLevelIntro }}
+
+{{ tw.topLevelDetail }}
+
+## List of metrics
+
+{{ telemetry.shared.metricsTableIntro }}
+
+{% for group in tw.metricGroups %}
+### {{ group.plugin }}
+
+{% if group.page %}
+See [{{ group.plugin.split('—')[0] | trim }}](./{{ group.page }}).
+
+{% endif %}
+| Metric name | Type | Description |
+|-------------|------|-------------|
+{% for row in group.rows -%}
+| `{{ row.name }}` | {{ row.type }} | {{ row.description }} |
+{% endfor %}
+
+{% endfor %}
+{{ tw.metricsNote }}

@@ -25,7 +25,7 @@ Each wrapper's documentation is grouped into the same sections:
 
 | Section                  | What's in it                                                                                                                                                                            |
 |--------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Overview**             | What the wrapper is and how to install it.                                                                                                                                              |
+| **Overview**             | What the wrapper is, how to install it, and one complete program that connects and runs a query. The page to read first.                                                                 |
 | **Set up by Scenario**   | An interactive builder — answer a few questions about your application and get a working configuration.                                                                                 |
 | **Using Plugins**        | One page per feature plugin (Failover, IAM Authentication, AWS Secrets Manager, Blue/Green, KMS Encryption, and so on), describing what the plugin does and every parameter it accepts. |
 | **Shared Configuration** | Cross-cutting settings — TLS/SSL, AWS credentials resolution, host selection strategies — that more than one plugin relies on.                                                          |

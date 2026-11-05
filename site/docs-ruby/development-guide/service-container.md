@@ -148,8 +148,8 @@ background cleanup thread. Shared across the wrapper.
 **What it offers**
 
 - `register(name, ttl:)` — create a named cache partition.
-- `set(name, key, value)` / `get(name, key)` — store and read items.
-- `get_if_registered(name, key)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
+- `set(name, key, value)` / `get(name, key, register_access: false)` — store and read items.
+- `get_if_registered(name, key, register_access: false)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
 - `exists?(name, key)` / `remove(name, key)` / `clear(name)` / `clear_all`.
 
 **When to use it**
@@ -196,7 +196,7 @@ events synchronously and batches the rest, deduplicating via `Set` semantics.
 **When to use it**
 
 Use it to decouple event producers and consumers. For example the Storage
-Service publishes a `DataAccessEvent` on cache reads, and the Monitor Service
+Service publishes a `DataAccessEvent` on cache reads made with `register_access: true`, and the Monitor Service
 subscribes to it to extend the matching monitor's expiration.
 
 ### Plugin Manager

@@ -492,7 +492,10 @@ addons:
         short: query retries
         requires: { integration: [active_record] }
         blocked: Active Record supplies this. Talking to the gem directly, retrying is your code's decision.
-        hint: Active Record retries safely retryable queries once by default.
+        hint: >
+          Active Record retries safely retryable queries once by default. It does not
+          retry `FailoverSuccessError` or `TransactionStateUnknownError`, which the
+          failover plugin raises after a successful failover.
         emit:
           pool: { connection_retries: 3, retry_deadline: 5 }
           links: [ar_retries]
@@ -578,7 +581,7 @@ addons:
         - "A Blue/Green Deployment exists and the wrapper can read its status before the switchover starts."
       notes:
         - "The plugin holds traffic during the switchover instead of letting it fail, then resumes against the promoted deployment."
-        - "After the switchover, connections that were opened to the old blue environment are closed the next time they are used. With the failover plugin (on by default), that use raises `FailoverSuccessError` (or `TransactionStateUnknownError` inside a transaction) on a connection that is already reconnected to the new environment, so handle it as you would a failover. Set `bg_drop_blue_connections: false` to keep using those connections instead."
+        - "After the switchover, connections that were opened to the old blue environment are closed the next time they are used. If the failover plugin is enabled (list `failover` in `wrapper_plugins` alongside `bg`), that use raises `FailoverSuccessError` (or `TransactionStateUnknownError` inside a transaction) on a connection that is already reconnected to the new environment, so handle it as you would a failover. Set `bg_drop_blue_connections: false` to keep using those connections instead, at the risk of reading from the retired blue environment."
         - "If you connect through an RDS Proxy, AWS requires the blue cluster to be registered with the proxy before the Blue/Green deployment is created — you cannot add the proxy afterward."
       links: [rds_bluegreen]
 

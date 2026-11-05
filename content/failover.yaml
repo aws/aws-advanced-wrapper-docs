@@ -240,7 +240,7 @@ wrapperOnly:
     - |
       ### ActiveRecord integration
 
-      Through ActiveRecord (the `aws_postgresql` / `aws_mysql2` adapters), the adapter's
+      Through ActiveRecord (the `aws_postgresql` / `aws_mysql2` / `aws_trilogy` adapters), the adapter's
       `translate_exception` decides what your code rescues, and only one failover error is
       translated:
 
@@ -383,7 +383,7 @@ enhanced:
   thirdPartyNote:
     ruby: |
       :::note Using the wrapper through ActiveRecord
-      When you use the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`),
+      When you use the wrapper through ActiveRecord (`aws_postgresql`, `aws_mysql2`, or `aws_trilogy`),
       reconnection is partially handled for you. On a successful failover the adapter
       re-runs `configure_connection` and reuses the pooled connection in place rather than
       discarding it, so you should not call `disconnect!` or discard the connection object
@@ -402,9 +402,9 @@ enhanced:
 
         - A query that runs longer than the client's `read_timeout`. The driver closes the
           socket before it raises the timeout, so the connection cannot be reused.
-        - The first query on a connection that sat idle longer than the server's
-          `wait_timeout`. MySQL 8.0.24 and later closes such a connection and reports error
-          4031.
+        - A query on a connection that sat idle longer than the server's `wait_timeout`.
+          The server closes such a connection; MySQL 8.0.24 and later reports error 4031,
+          and earlier versions report a lost connection (2006 or 2013).
         - A connection lost during a query, or a server that has gone away (with `mysql2`,
           errors 2006, 2013, and 2055).
 
@@ -425,15 +425,15 @@ enhanced:
         :::note Changed in 1.1.0
         Before 1.1.0, `mysql2` did not fail over on a `read_timeout` or on errors 4031 and
         2055. A `read_timeout` raised `Mysql2::Error::TimeoutError` (`ActiveRecord::AdapterTimeout`
-        under `aws_mysql2`), and errors 4031 and 2055 were raised as is
-        (`ActiveRecord::ConnectionFailed` under `aws_mysql2`, which ActiveRecord answered by
+        under `aws_mysql2`), and errors 4031 and 2055 were raised as is. Under `aws_mysql2`,
+        error 4031 became `ActiveRecord::ConnectionFailed`, which ActiveRecord answered by
         reconnecting to the original endpoint and retrying the queries it considers
-        retryable).
+        retryable, and error 2055 became `ActiveRecord::StatementInvalid`.
         :::
       - |
         ## ActiveRecord integration
 
-        When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the
+        When using the wrapper through ActiveRecord (`aws_postgresql`, `aws_mysql2`, or `aws_trilogy`), the
         adapter's `translate_exception` decides what your code actually rescues, and the
         outcome differs by error:
 

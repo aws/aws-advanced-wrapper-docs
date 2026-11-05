@@ -38,18 +38,18 @@ bundle install
 Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
 
 :::warning
-If you are using `mysql2` on Windows with Ruby 4.0 or later, you may also need to add `fiddle` to your Gemfile:
+Which extra gems your Gemfile needs depends on your Ruby version, your platform, and whether you are using Active Record:
 
-```ruby
-gem 'fiddle'
-```
+| Version | Using Active Record | Extra gems | Reason |
+| --- | --- | --- | --- |
+| Ruby 3.3 | Either | None | `base64`, `bigdecimal` and `logger` are all still default gems |
+| Ruby 3.4 | No | `base64`, `bigdecimal` | Ruby 3.4 removed both from the default gems |
+| Ruby 3.4 | Yes | None | Active Record declares both itself |
+| Ruby 4.0 or later | No | `base64`, `bigdecimal`, `logger` | Ruby 4.0 removed `logger` as well |
+| Ruby 4.0 or later | Yes | None | Active Record declares all three itself |
+| Ruby 4.0 or later, on Windows with `mysql2` | Either | `fiddle` | `mysql2` loads `libmysql.dll` through `fiddle` without declaring it, and neither does Active Record |
 
-On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` when you set
-`RUBY_MYSQL2_LIBMYSQL_DLL`, when the gem ships its own `libmysql.dll`, or
-when Ruby was not installed with RubyInstaller, but it does not declare
-`fiddle` as a dependency. Ruby 4.0 removed `fiddle` from the default gems,
-so in those cases a bundle without it raises `LoadError` when `mysql2` is
-required.
+A bundle missing any of them raises `LoadError` on the first require.
 :::
 
 
@@ -122,6 +122,16 @@ adapter key.
 :::note Keeping the password out of your source
 Read it from the environment with `ENV.fetch('PGPASSWORD')` in Ruby, or
 `<%= ENV.fetch('PGPASSWORD') %>` in `config/database.yml`, or have
+AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
+`password:` key, as described on
+[AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a
+database user with no password at all, consider using `iam` instead; see
+[IAM Authentication Plugin](using-plugins/iam-authentication).
+:::
+
+
+:::note Keeping the password out of your source
+Read it from the environment with `ENV.fetch('PGPASSWORD')`, or have
 AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
 `password:` key, as described on
 [AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a

@@ -428,6 +428,74 @@
     },
     {
       "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "mysql",
+          "trilogy"
+        ]
+      },
+      "from": "required on MySQL: the IAM token is sent via mysql_clear_password",
+      "emit": {
+        "params": {
+          "enable_cleartext_plugin": true
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "pg"
+        ]
+      },
+      "from": "recommended: encrypts the IAM token (sent as the password) in transit",
+      "emit": {
+        "params": {
+          "sslmode": "verify-full",
+          "sslrootcert": "<path/to/global-bundle.pem>"
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "mysql"
+        ]
+      },
+      "from": "recommended: encrypts the IAM token (sent in cleartext) in transit",
+      "emit": {
+        "params": {
+          "ssl_mode": "verify_identity",
+          "sslca": "<path/to/global-bundle.pem>"
+        }
+      }
+    },
+    {
+      "when": {
+        "credentials": [
+          "iam"
+        ],
+        "engine": [
+          "trilogy"
+        ]
+      },
+      "from": "recommended: encrypts the IAM token (sent in cleartext) in transit",
+      "emit": {
+        "params": {
+          "ssl_mode": "verify_identity",
+          "ssl_ca": "<path/to/global-bundle.pem>"
+        }
+      }
+    },
+    {
+      "when": {
         "continuity": [
           "instance",
           "region"

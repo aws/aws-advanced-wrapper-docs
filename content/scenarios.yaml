@@ -374,6 +374,25 @@ rules:
   - when: { deployment: [community], engine: [mysql, trilogy] }
     emit: { params: { wrapper_dialect: mysql } }
 
+  # --- IAM authentication: the token travels as the password, so a few more
+  # settings are needed. On MySQL the token is only sent with the cleartext
+  # client plugin, so `enable_cleartext_plugin` is required there (not on
+  # PostgreSQL). TLS is not strictly required but strongly recommended on every
+  # engine, because the token is sent as the password (in cleartext on MySQL);
+  # the verification mode and CA-certificate key names differ per driver.
+  - when: { credentials: [iam], engine: [mysql, trilogy] }
+    from: "required on MySQL: the IAM token is sent via mysql_clear_password"
+    emit: { params: { enable_cleartext_plugin: true } }
+  - when: { credentials: [iam], engine: [pg] }
+    from: "recommended: encrypts the IAM token (sent as the password) in transit"
+    emit: { params: { sslmode: verify-full, sslrootcert: "<path/to/global-bundle.pem>" } }
+  - when: { credentials: [iam], engine: [mysql] }
+    from: "recommended: encrypts the IAM token (sent in cleartext) in transit"
+    emit: { params: { ssl_mode: verify_identity, sslca: "<path/to/global-bundle.pem>" } }
+  - when: { credentials: [iam], engine: [trilogy] }
+    from: "recommended: encrypts the IAM token (sent in cleartext) in transit"
+    emit: { params: { ssl_mode: verify_identity, ssl_ca: "<path/to/global-bundle.pem>" } }
+
   # --- resolving the cluster endpoint to a real instance at connect time
   - when: { continuity: [instance, region], deployment: [cluster, cluster_readonly, global, multi_az_cluster] }
     emit:

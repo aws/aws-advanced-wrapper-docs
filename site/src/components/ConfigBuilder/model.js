@@ -151,7 +151,24 @@ export function buildConfig(data, state, active) {
   // The rules key on `deployment`; it comes from the db_type add-on, but only
   // when that selection is still valid under the current answers.
   const deployment = effectiveDeployment(data, state, active);
-  const axisState = { ...state, ...active, deployment };
+  // Expose each exclusive add-on's current selection under its add-on id (e.g.
+  // `credentials: iam`), so a rule can emit configuration that depends on both
+  // an add-on choice and an axis — for example the cleartext client plugin that
+  // IAM authentication needs on MySQL but not PostgreSQL. Only a selection that
+  // actually applies is exposed: if the add-on or its chosen option is blocked
+  // (e.g. IAM on a community database), it is left out so no rule fires for it.
+  const baseState = { ...state, ...active, deployment };
+  const addonSelections = {};
+  for (const addon of data.addons || []) {
+    if (!addon.exclusive) continue;
+    const selected = state.addons[addon.id];
+    if (!selected) continue;
+    if (blockReason(addon, baseState, data)) continue;
+    const option = (addon.options || []).find((o) => o.id === selected);
+    if (option && blockReason(option, baseState, data)) continue;
+    addonSelections[addon.id] = selected;
+  }
+  const axisState = { ...baseState, ...addonSelections };
 
   for (const question of data.questions) {
     const chosen = active[question.id];
@@ -161,7 +178,7 @@ export function buildConfig(data, state, active) {
   }
 
   for (const rule of data.rules) {
-    if (condMet(rule.when, axisState)) applyPatch(config, rule.emit, 'your deployment', data);
+    if (condMet(rule.when, axisState)) applyPatch(config, rule.emit, rule.from || 'your deployment', data);
   }
 
   for (const addon of data.addons) {

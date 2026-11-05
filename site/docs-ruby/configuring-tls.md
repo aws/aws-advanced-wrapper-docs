@@ -20,6 +20,7 @@ We strongly recommend a TLS 1.2+ connection **with certificate verification**:
 |---|---|---|
 | PostgreSQL (`pg`) | `sslmode: verify-full` | `sslrootcert` |
 | MySQL (`mysql2`) | `ssl_mode: verify_identity` | `sslca` |
+| MySQL (`trilogy`) | `ssl_mode: verify_identity` | `ssl_ca` |
 
 `verify-full` and `verify_identity` check both the certificate chain **and** that the
 hostname matches the certificate, which is what protects the connection against a
@@ -75,6 +76,10 @@ production:
   sslca: /path/to/global-bundle.pem
 ```
 
+With the Trilogy driver, use `adapter: aws_trilogy` and name the certificate authority
+`ssl_ca` instead of `sslca`; the `ssl_mode` verification names (`verify_identity`,
+`verify_ca`, …) are the same.
+
 Using the driver directly, they are keyword arguments:
 
 ```ruby
@@ -101,6 +106,11 @@ AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
 )
 ```
 
+With Trilogy, use `WrapperTrilogyClient`, name the certificate authority `ssl_ca`
+instead of `sslca`, and pass `ssl_mode` as an **integer** constant
+(`ssl_mode: Trilogy::SSL_VERIFY_IDENTITY`) — the direct client rejects a string or
+symbol with `TypeError`. Without `ssl_mode`, Trilogy makes no TLS connection at all.
+
 ## Certificate bundle
 
 When connecting to an RDS or Aurora endpoint, use the AWS global certificate bundle as the
@@ -112,7 +122,7 @@ name — the certificate authority you supply must be the one appropriate for *t
 endpoint, not for the RDS endpoint behind it.
 
 For TLS options beyond those shown here, see the driver documentation:
-[`pg`](https://github.com/ged/ruby-pg) and [`mysql2`](https://github.com/brianmario/mysql2).
+[`pg`](https://github.com/ged/ruby-pg), [`mysql2`](https://github.com/brianmario/mysql2), and [`trilogy`](https://github.com/trilogy-libraries/trilogy).
 
 ## Why this matters for authentication plugins
 
@@ -121,6 +131,10 @@ TLS is not optional in practice when a credential travels over the connection:
 - [IAM Authentication](using-plugins/iam-authentication) sends the generated token as the
   password. With MySQL it is sent in cleartext, because IAM authentication relies on the
   `mysql_clear_password` client plugin.
+- [Federated Authentication](using-plugins/federated-auth) and
+  [Okta Authentication](using-plugins/okta-auth) authenticate through an external identity
+  provider and then connect with an IAM token, so they send that token as the password in
+  exactly the same way as IAM Authentication — including in cleartext on MySQL.
 - [AWS Secrets Manager](using-plugins/aws-secrets-manager) sends the retrieved password on
   the connection like any other password.
 

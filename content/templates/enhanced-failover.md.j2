@@ -1,4 +1,3 @@
-{% import "partials/plugin-exclusivity.md.j2" as ex %}
 ---
 title: {{ page_title }}
 ---
@@ -134,11 +133,9 @@ When `wrapper_plugins` is not specified, the wrapper loads `failover,initial_con
 
 Verify plugin compatibility within your {{ wrapper.label }} configuration using the [compatibility guide]({{ enhanced.wrappers[wrapper_id].compatibilityGuide }}).
 
-{% set this_code = enhanced.wrappers[wrapper_id].pluginCode %}
-{% set others = (wrapper.pluginGroups.failover or []) | reject('equalto', this_code) | list %}
-:::warning
-{{ ex.exclusivity(plugin_group_labels['failover'], this_code, others, 'PluginConflictError' if wrapper_id == 'ruby' else none) }}
-:::
+{% set banner_group = 'failover' %}
+{% set banner_code = enhanced.wrappers[wrapper_id].pluginCode %}
+{% include "partials/plugin-exclusivity-banner.md.j2" %}
 
 ## Enhanced failover parameters
 

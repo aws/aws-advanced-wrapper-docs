@@ -76,7 +76,7 @@ wrappers:
 
     # Ruby diagram labels come from the `diagram:` block below.
     architectureComponents: |
-      1. The connection entry points (`WrapperPgConnection`, `WrapperMysql2Client`, and the `aws_postgresql` / `aws_mysql2` ActiveRecord adapters)
+      1. The connection entry points (`WrapperPgConnection`, `WrapperMysql2Client`, `WrapperTrilogyClient`, and the `aws_postgresql` / `aws_mysql2` / `aws_trilogy` ActiveRecord adapters)
       2. The [plugin manager](./service-container#plugin-manager) (one of the services in the container)
       3. The [loadable and extensible plugins](./loadable-plugins)
       4. The [service container](./service-container) of discrete services
@@ -96,7 +96,7 @@ wrappers:
     executeKey: "the qualified driver method name (e.g. `connection.query`, `connection.exec`)"
     notifyConnChangedKey: "notify_connection_changed"
 
-    devPrereqs: "Make sure you have Ruby 3.3+ installed, along with your choice of underlying driver gem (`pg` or `mysql2`)."
+    devPrereqs: "Make sure you have Ruby 3.3+ installed, along with your choice of underlying driver gem (`pg`, `mysql2`, or `trilogy`)."
     buildTool: "Bundler + RSpec"
     sampleCode: |
       A minimal connection example using the wrapper:
@@ -166,8 +166,8 @@ wrappers:
 
     diagram:
       entryPoints:
-        - "WrapperPgConnection / WrapperMysql2Client"
-        - "aws_postgresql / aws_mysql2 (ActiveRecord)"
+        - "WrapperPgConnection / WrapperMysql2Client / WrapperTrilogyClient"
+        - "aws_postgresql / aws_mysql2 / aws_trilogy (ActiveRecord)"
       wrapperNode: "Wrapper Connection"
       samplePlugins:
         - "Plugin A"
@@ -256,7 +256,8 @@ wrappers:
           - `hosts` / `all_hosts` — allowed and full host lists.
           - `host_list_provider` — the active provider.
           - `select_host(hosts, role, strategy, props = nil)` — pick a host by role and host-selection strategy name.
-          - `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Register the name in lowercase: `select_host` lowercases the requested strategy before looking it up.
+          - `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Strategy names are case-insensitive.
+          - `HostService.validate_strategy!(name)` — a class method that raises `Unsupported host selection strategy` when no selector is registered under the name. Plugins that take a strategy name call it when they are constructed.
         whenToUse: |
           Use it to read topology, register a custom host-selection strategy, or pick a
           host by role (writer/reader) and strategy.
@@ -296,14 +297,15 @@ wrappers:
           background cleanup thread. Shared across the wrapper.
         offers: |
           - `register(name, ttl:)` — create a named cache partition.
-          - `set(name, key, value)` / `get(name, key)` — store and read items.
-          - `get_if_registered(name, key)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
+          - `set(name, key, value)` / `get(name, key, register_access: false)` — store and read items.
+          - `get_if_registered(name, key, register_access: false)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
           - `exists?(name, key)` / `remove(name, key)` / `clear(name)` / `clear_all`.
         whenToUse: |
           Use it to cache data reused across the wrapper — for example the
-          `RdsHostListProvider` caches cluster topology here. Reads publish a
-          `DataAccessEvent` (unless `register_access: false`), which keeps related
-          monitors alive.
+          `RdsHostListProvider` caches cluster topology here. A read publishes a
+          `DataAccessEvent` only when called with `register_access: true`, which
+          extends the expiration of any monitor that produces that cache's data. Pass
+          it only when the read should keep that monitor alive.
       - name: "Monitor Service"
         short: "Monitor Service"
         global: true
@@ -333,7 +335,7 @@ wrappers:
           - `release_resources` — stop the background publishing thread.
         whenToUse: |
           Use it to decouple event producers and consumers. For example the Storage
-          Service publishes a `DataAccessEvent` on cache reads, and the Monitor Service
+          Service publishes a `DataAccessEvent` on cache reads made with `register_access: true`, and the Monitor Service
           subscribes to it to extend the matching monitor's expiration.
       - name: "Plugin Manager"
         short: "Plugin Manager"
@@ -351,7 +353,7 @@ wrappers:
           your plugin. See the dedicated [Plugin Manager](#plugin-manager) section below.
 
     perf:
-      driverNames: "`mysql2`/`pg`"
+      driverNames: "`mysql2`/`trilogy`/`pg`"
       # Rough magnitude of the fixed per-call cost, stated in the intro.
       fixedCostMagnitude: "a microsecond"
       # The end-to-end real-database benchmark: display name (inline code) and link.

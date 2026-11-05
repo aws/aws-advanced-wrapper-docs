@@ -12,8 +12,8 @@ flowchart TB
 
   subgraph entry["Entry points"]
     direction LR
-    ep1["WrapperPgConnection / WrapperMysql2Client"]
-    ep2["aws_postgresql / aws_mysql2 (ActiveRecord)"]
+    ep1["WrapperPgConnection / WrapperMysql2Client / WrapperTrilogyClient"]
+    ep2["aws_postgresql / aws_mysql2 / aws_trilogy (ActiveRecord)"]
   end
 
   subgraph conn["Wrapper Connection — one per connection"]
@@ -59,7 +59,7 @@ flowchart TB
 
 The AWS Advanced Ruby Driver Wrapper contains 5 main components:
 
-1. The connection entry points (`WrapperPgConnection`, `WrapperMysql2Client`, and the `aws_postgresql` / `aws_mysql2` ActiveRecord adapters)
+1. The connection entry points (`WrapperPgConnection`, `WrapperMysql2Client`, `WrapperTrilogyClient`, and the `aws_postgresql` / `aws_mysql2` / `aws_trilogy` ActiveRecord adapters)
 2. The [plugin manager](./service-container#plugin-manager) (one of the services in the container)
 3. The [loadable and extensible plugins](./loadable-plugins)
 4. The [service container](./service-container) of discrete services

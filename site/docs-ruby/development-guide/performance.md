@@ -5,7 +5,7 @@ title: Performance and Overhead
 # Performance and Overhead
 
 Every database operation goes through the wrapper's plugin pipeline before reaching the underlying
-`mysql2`/`pg` driver, which adds some cost. The short version: the wrapper adds a **small, fixed
+`mysql2`/`trilogy`/`pg` driver, which adds some cost. The short version: the wrapper adds a **small, fixed
 amount of work per call** - on the order of a microsecond - and against a real query that cost is too
 small to measure, dwarfed by the network round trip to the database.
 

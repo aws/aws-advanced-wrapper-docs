@@ -21,14 +21,14 @@ will follow your choice where an equivalent page exists.
 
 ## Getting started
 
-Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, and `mysql2` 0.5.7 or later.
+Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, `mysql2` 0.5.7 or later, and `trilogy` 2.13.2 or later.
 
 ### 1. Add the gem
 
 ```ruby
 # Gemfile
 gem 'aws_advanced_ruby_driver_wrapper'
-gem 'pg'        # or: gem 'mysql2'
+gem 'pg'        # or: gem 'mysql2' / gem 'trilogy' for MySQL
 ```
 
 ```bash
@@ -38,28 +38,28 @@ bundle install
 Without Bundler, `gem install aws_advanced_ruby_driver_wrapper pg` does the same thing.
 
 :::warning
-Which extra gems your Gemfile needs depends on your Ruby version, your platform, and whether you are using Active Record:
+If you are using `mysql2` on Windows with Ruby 4.0 or later, you may also need to add `fiddle` to your Gemfile:
 
-| Version | Using Active Record | Extra gems | Reason |
-| --- | --- | --- | --- |
-| Ruby 3.3 | Either | None | `base64`, `bigdecimal` and `logger` are all still default gems |
-| Ruby 3.4 | No | `base64`, `bigdecimal` | Ruby 3.4 removed both from the default gems |
-| Ruby 3.4 | Yes | None | Active Record declares both itself |
-| Ruby 4.0 or later | No | `base64`, `bigdecimal`, `logger` | Ruby 4.0 removed `logger` as well |
-| Ruby 4.0 or later | Yes | None | Active Record declares all three itself |
-| Ruby 4.0 or later, on Windows with `mysql2` | Either | `fiddle` | `mysql2` loads `libmysql.dll` through `fiddle` without declaring it, and neither does Active Record |
+```ruby
+gem 'fiddle'
+```
 
-A bundle missing any of them raises `LoadError` on the first require.
+On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` when you set
+`RUBY_MYSQL2_LIBMYSQL_DLL`, when the gem ships its own `libmysql.dll`, or
+when Ruby was not installed with RubyInstaller, but it does not declare
+`fiddle` as a dependency. Ruby 4.0 removed `fiddle` from the default gems,
+so in those cases a bundle without it raises `LoadError` when `mysql2` is
+required.
 :::
 
 
 ### 2. Point Active Record at your cluster
 
-The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`, which are drop-in replacements for `postgresql` and `mysql2`.
+The wrapper registers three adapters, `aws_postgresql`, `aws_mysql2`, and `aws_trilogy`, which are drop-in replacements for `postgresql`, `mysql2`, and `trilogy`.
 
-Bundler requires the gem for you. In a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'` first: that single require is what registers both adapters, and without it Active Record reports `aws_postgresql` as a nonexistent adapter.
+Bundler requires the gem for you. In a plain Ruby script, add `require 'aws_advanced_ruby_driver_wrapper'` first: that single require is what registers all three adapters, and without it Active Record reports `aws_postgresql` as a nonexistent adapter.
 
-If you are starting without a Rails application, this is a complete program. Save it as `main.rb` and run it:
+If you are starting without a Rails application, add `gem 'activerecord'` to the Gemfile from step 1 (outside Rails, nothing else installs it), run `bundle install`, and this is a complete program. Save it as `main.rb` and run it:
 
 ```ruby
 # main.rb
@@ -111,10 +111,22 @@ Active Record keeps its own connection pool and its reading and writing roles; t
 
 :::note Mixing wrapped and standard adapters in one application
 The wrapped adapters register their type information under the underlying
-`postgresql` and `mysql2` adapter names. If one application uses both a
-standard connection (`postgresql`/`mysql2`) and a wrapped one
-(`aws_postgresql`/`aws_mysql2`), a custom type registered for one is shared
-with the other, because both resolve under the same underlying adapter key.
+`postgresql`, `mysql2`, and `trilogy` adapter names. If one application uses
+both a standard connection (`postgresql`/`mysql2`/`trilogy`) and a wrapped one
+(`aws_postgresql`/`aws_mysql2`/`aws_trilogy`), a custom type registered for
+one is shared with the other, because both resolve under the same underlying
+adapter key.
+:::
+
+
+:::note Keeping the password out of your source
+Read it from the environment with `ENV.fetch('PGPASSWORD')` in Ruby, or
+`<%= ENV.fetch('PGPASSWORD') %>` in `config/database.yml`, or have
+AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
+`password:` key, as described on
+[AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a
+database user with no password at all, consider using `iam` instead; see
+[IAM Authentication Plugin](using-plugins/iam-authentication).
 :::
 
 
@@ -130,7 +142,7 @@ database user with no password at all, consider using `iam` instead; see
 
 ### Or connect with the driver directly
 
-Without Active Record, the wrapper provides connection classes that stand in for `PG::Connection` and `Mysql2::Client`. This is a complete program; save it as `main.rb` and run it:
+Without Active Record, the wrapper provides connection classes that stand in for `PG::Connection`, `Mysql2::Client`, and `Trilogy`. This is a complete program; save it as `main.rb` and run it:
 
 ```ruby
 # main.rb
@@ -157,7 +169,7 @@ end
 bundle exec ruby main.rb
 ```
 
-For PostgreSQL, `require 'aws_advanced_ruby_driver_wrapper/postgresql'` and use `AwsAdvancedRubyDriverWrapper::WrapperPgConnection`, which stands in for `PG::Connection` and takes `dbname:` and `user:`. For MySQL, `require 'aws_advanced_ruby_driver_wrapper/mysql'` and use `AwsAdvancedRubyDriverWrapper::WrapperMysql2Client`, which stands in for `Mysql2::Client` and takes `database:` and `username:`. Either way the calls your code already makes keep working, and the plugins act on each one.
+For PostgreSQL, `require 'aws_advanced_ruby_driver_wrapper/postgresql'` and use `AwsAdvancedRubyDriverWrapper::WrapperPgConnection`, which stands in for `PG::Connection` and takes `dbname:` and `user:`. For MySQL, `require 'aws_advanced_ruby_driver_wrapper/mysql'` and use `AwsAdvancedRubyDriverWrapper::WrapperMysql2Client`, which stands in for `Mysql2::Client` and takes `database:` and `username:`. To use the Trilogy driver instead, `require 'aws_advanced_ruby_driver_wrapper/trilogy'` and use `AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient`, which stands in for `Trilogy` and takes the same `database:` and `username:`. Either way the calls your code already makes keep working, and the plugins act on each one.
 
 ### Next
 

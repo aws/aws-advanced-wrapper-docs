@@ -15,6 +15,8 @@ Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links
 | [`gdb_failover`](../using-plugins/gdb-failover) | ✅ | ❌ [^4] | ❌ [^4] | ❌ [^5] | ❌ [^5] | ❌ [^5] | 
 | [`iam`](../using-plugins/iam-authentication) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^6] | 
 | [`secrets_manager`](../using-plugins/aws-secrets-manager) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^6] | 
+| [`federated_auth`](../using-plugins/federated-auth) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^6] | 
+| [`okta`](../using-plugins/okta-auth) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ [^6] | 
 | [`initial_connection`](../using-plugins/initial-connection-strategy) | ✅ | ✅ | ✅ | ❌ [^7] | ❌ [^7] | ❌ [^7] | 
 | [`bg`](../using-plugins/blue-green) | ❌ [^8] | ✅ | ❌ [^9] | ✅ | ✅ | ❌ [^10] | 
 
@@ -30,7 +32,7 @@ Legend: ✅ compatible · ❌ not compatible · a numbered footnote `[^n]` links
 
 [^5]: The global database failover plugin needs an Aurora global database spanning regions; this deployment is not one.
 
-[^6]: IAM and Secrets Manager authentication are Amazon RDS/Aurora features; a community database you run yourself does not support them.
+[^6]: IAM and Secrets Manager authentication are Amazon RDS/Aurora features; a community database you run yourself does not support them. The Federated Authentication (AD FS) and Okta Authentication plugins obtain their database credential through IAM as well, so the same limitation applies to them.
 
 [^7]: The initial connection plugin resolves a cluster endpoint to an instance; this deployment has no cluster topology to resolve.
 

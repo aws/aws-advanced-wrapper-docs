@@ -16,7 +16,7 @@ Version 1.0.0
 :::
 
 :::warning Only one authentication plugin at a time
-The `iam` and `secrets_manager` plugins are mutually exclusive — only one authentication plugin may be active at a time. Configuring both in `wrapper_plugins` raises a `PluginConflictError` at connection initialization.
+Only one authentication plugin may be enabled per connection. Do not use `iam` together with any of the other authentication plugins (`secrets_manager`, `federated_auth`, `okta`) at the same time for the same connection. Configuring more than one raises a `PluginConflictError` at connection initialization.
 :::
 
 ## Prerequisites
@@ -66,6 +66,16 @@ AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
 )
 ```
 
+With the Trilogy driver, swap in
+`AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient`. IAM authentication works
+the same way — keep `enable_cleartext_plugin: true` — but two TLS keys differ
+on Trilogy: the CA certificate is `ssl_ca` (Trilogy's name for it) rather than
+`sslca`, and on the direct client `ssl_mode` must be an integer constant
+(`ssl_mode: Trilogy::SSL_VERIFY_IDENTITY`) — a string or symbol raises
+`TypeError`. (The `aws_trilogy` ActiveRecord adapter does accept the string
+mode names such as `verify_identity`.) See
+[Configuring TLS/SSL](../configuring-tls) for the full per-driver table.
+
 **PostgreSQL (`pg`):**
 
 ```ruby
@@ -102,6 +112,10 @@ does **not** set this for you, so pass `enable_cleartext_plugin: true` when
 using the plugin with MySQL. Because the token is sent in cleartext, you
 must also use a TLS/SSL connection so it is encrypted in transit. This does
 not apply to PostgreSQL (`pg`).
+
+This applies to both MySQL drivers (`mysql2` and `trilogy`). On `trilogy`,
+omitting `enable_cleartext_plugin: true` makes the driver raise
+`Trilogy::AuthPluginError` and the token is never sent.
 :::
 
 
@@ -140,9 +154,9 @@ Verify plugin compatibility within your Ruby configuration using the [compatibil
 | `iam_host` | String | No | derived from host | Overrides the hostname used to generate the IAM token. Required when connecting through a custom endpoint. The default is derived from the connection host.<br/><br/>Example: `my-cluster.cluster-xyz.us-east-1.rds.amazonaws.com` |
 | `iam_port` | Integer | No | dialect default | Overrides the port used to generate the IAM token. The default is determined from the underlying driver protocol or the dialect default.<br/><br/>Example: `5432` |
 | `iam_region` | String | No | parsed from host | Overrides the AWS region used to generate the IAM token. The default is parsed from the connection string.<br/><br/>Example: `us-east-1` |
-| `iam_expiration_sec` | Float | No | `870.0` | Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process, and its lifetime is set by the first connection that uses the IAM plugin; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected. *(sec)*<br/><br/>Example: `600.0 (maximum 870.0)` |
+| `iam_expiration_sec` | Float | No | `870.0` | Number of seconds a generated IAM token is kept in the cache before a new one is generated. The token itself is valid for 15 minutes, and a cached token is never used within 60 seconds of that expiry, so values of `840.0` and above will all have their tokens refetched at the `840` mark. The token cache is shared by every connection in the process that uses the `iam`, `federated_auth`, or `okta` plugin, and its lifetime is set by the first such connection; later connections that set a different value use the first connection's value. A value greater than `870.0` or less than or equal to `0` is rejected. *(sec)*<br/><br/>Example: `600.0 (maximum 870.0)` |
 | `iam_access_token_property_name` | Symbol | No | `:password` | The connection property name the generated token is injected into. Some underlying drivers require a specific property name for the token.<br/><br/>Example: `:password` |
-| `aws_credentials_provider` | Object | No | SDK default chain | A custom AWS credentials provider instance. One property is read by the IAM authentication, Secrets Manager and KMS encryption plugins, so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain.<br/><br/>Example: `Aws::AssumeRoleCredentials.new(...)` |
+| `aws_credentials_provider` | Object | No | SDK default chain | A custom AWS credentials provider instance. One property is read by every plugin that calls AWS — IAM authentication, Secrets Manager, KMS encryption and custom endpoint — so setting it once covers all of them. When unset, each falls back to the AWS SDK default credential provider chain.<br/><br/>Example: `Aws::AssumeRoleCredentials.new(...)` |
 
 ## Using IAM authentication with Global Databases
 
@@ -191,10 +205,11 @@ login error occurs with a cached token, the plugin automatically fetches a
 fresh token and retries the connection once.
 
 :::note
-The token cache is shared by every connection in the process, and the first
-connection that uses the IAM plugin sets its `iam_expiration_sec`. Connections
-opened later with a different value still use the first connection's value, so
-set `iam_expiration_sec` to the same value on every connection.
+The token cache is shared by every connection in the process that uses the
+`iam`, `federated_auth`, or `okta` plugin, and the first such connection sets
+its `iam_expiration_sec`. Connections opened later with a different value still
+use the first connection's value, so set `iam_expiration_sec` to the same value
+on every connection.
 :::
 
 ## Related

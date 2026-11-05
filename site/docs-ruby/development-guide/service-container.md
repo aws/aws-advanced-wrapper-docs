@@ -95,7 +95,8 @@ strategies. See [Host List Providers](#host-list-providers).
 - `hosts` / `all_hosts` — allowed and full host lists.
 - `host_list_provider` — the active provider.
 - `select_host(hosts, role, strategy, props = nil)` — pick a host by role and host-selection strategy name.
-- `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Register the name in lowercase: `select_host` lowercases the requested strategy before looking it up.
+- `HostService.register_host_selector(name, selector)` — a class method that registers a custom strategy for all connections. Strategy names are case-insensitive.
+- `HostService.validate_strategy!(name)` — a class method that raises `Unsupported host selection strategy` when no selector is registered under the name. Plugins that take a strategy name call it when they are constructed.
 
 **When to use it**
 
@@ -147,16 +148,17 @@ background cleanup thread. Shared across the wrapper.
 **What it offers**
 
 - `register(name, ttl:)` — create a named cache partition.
-- `set(name, key, value)` / `get(name, key)` — store and read items.
-- `get_if_registered(name, key)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
+- `set(name, key, value)` / `get(name, key, register_access: false)` — store and read items.
+- `get_if_registered(name, key, register_access: false)` — read a partition that may not exist (e.g. a cache owned by an optional plugin).
 - `exists?(name, key)` / `remove(name, key)` / `clear(name)` / `clear_all`.
 
 **When to use it**
 
 Use it to cache data reused across the wrapper — for example the
-`RdsHostListProvider` caches cluster topology here. Reads publish a
-`DataAccessEvent` (unless `register_access: false`), which keeps related
-monitors alive.
+`RdsHostListProvider` caches cluster topology here. A read publishes a
+`DataAccessEvent` only when called with `register_access: true`, which
+extends the expiration of any monitor that produces that cache's data. Pass
+it only when the read should keep that monitor alive.
 
 ### Monitor Service
 
@@ -194,7 +196,7 @@ events synchronously and batches the rest, deduplicating via `Set` semantics.
 **When to use it**
 
 Use it to decouple event producers and consumers. For example the Storage
-Service publishes a `DataAccessEvent` on cache reads, and the Monitor Service
+Service publishes a `DataAccessEvent` on cache reads made with `register_access: true`, and the Monitor Service
 subscribes to it to extend the matching monitor's expiration.
 
 ### Plugin Manager

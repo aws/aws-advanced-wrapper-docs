@@ -53,7 +53,7 @@ wrappers:
     compatibilityGuide: "../compatibility"
     pluginGroups:
       failover: [failover, gdb_failover]
-      auth: [iam, secrets_manager]
+      auth: [iam, secrets_manager, federated_auth, okta]
     connectSnippet: |
       require 'aws_advanced_ruby_driver_wrapper/postgresql'
 
@@ -85,7 +85,7 @@ wrappers:
     # way because it needs a Rails application around it, so the two paths are
     # ordered by who the reader is, not by what fits in one file.
     gettingStarted:
-      note: "Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, and `mysql2` 0.5.7 or later."
+      note: "Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, `mysql2` 0.5.7 or later, and `trilogy` 2.13.2 or later."
       steps:
         - title: "1. Add the gem"
           blocks:
@@ -93,7 +93,7 @@ wrappers:
               code: |
                 # Gemfile
                 gem 'aws_advanced_ruby_driver_wrapper'
-                gem 'pg'        # or: gem 'mysql2'
+                gem 'pg'        # or: gem 'mysql2' / gem 'trilogy' for MySQL
             - lang: bash
               code: |
                 bundle install
@@ -102,39 +102,44 @@ wrappers:
                 does the same thing.
             # The house pattern for "this needs another gem" is a warning with
             # its own snippet, as on the IAM and Secrets Manager pages, rather
-            # than commented lines inside the main Gemfile.
+            # than commented lines inside the main Gemfile. The wrapper itself
+            # declares every gem it requires, so this warning is only for a gem
+            # `mysql2` requires on Windows without declaring it.
             - text: |
                 :::warning
-                Which extra gems your Gemfile needs depends on your Ruby version, your platform, and whether you are using Active Record:
+                If you are using `mysql2` on Windows with Ruby 4.0 or later, you may also need to add `fiddle` to your Gemfile:
 
-                | Version | Using Active Record | Extra gems | Reason |
-                | --- | --- | --- | --- |
-                | Ruby 3.3 | Either | None | `base64`, `bigdecimal` and `logger` are all still default gems |
-                | Ruby 3.4 | No | `base64`, `bigdecimal` | Ruby 3.4 removed both from the default gems |
-                | Ruby 3.4 | Yes | None | Active Record declares both itself |
-                | Ruby 4.0 or later | No | `base64`, `bigdecimal`, `logger` | Ruby 4.0 removed `logger` as well |
-                | Ruby 4.0 or later | Yes | None | Active Record declares all three itself |
-                | Ruby 4.0 or later, on Windows with `mysql2` | Either | `fiddle` | `mysql2` loads `libmysql.dll` through `fiddle` without declaring it, and neither does Active Record |
+                ```ruby
+                gem 'fiddle'
+                ```
 
-                A bundle missing any of them raises `LoadError` on the first require.
+                On Windows, `mysql2` uses `fiddle` to load `libmysql.dll` when you set
+                `RUBY_MYSQL2_LIBMYSQL_DLL`, when the gem ships its own `libmysql.dll`, or
+                when Ruby was not installed with RubyInstaller, but it does not declare
+                `fiddle` as a dependency. Ruby 4.0 removed `fiddle` from the default gems,
+                so in those cases a bundle without it raises `LoadError` when `mysql2` is
+                required.
                 :::
 
         - title: "2. Point Active Record at your cluster"
           blocks:
             - text: >-
-                The wrapper registers two adapters, `aws_postgresql` and `aws_mysql2`,
-                which are drop-in replacements for `postgresql` and `mysql2`.
+                The wrapper registers three adapters, `aws_postgresql`, `aws_mysql2`,
+                and `aws_trilogy`, which are drop-in replacements for `postgresql`,
+                `mysql2`, and `trilogy`.
             # Without this, Active Record raises AdapterNotFound and names only
             # its own built-in adapters, which does not hint that a require is
             # missing. Bundler covers the Rails case; a plain script does not.
             - text: >-
                 Bundler requires the gem for you. In a plain Ruby script, add
                 `require 'aws_advanced_ruby_driver_wrapper'` first: that single require
-                is what registers both adapters, and without it Active Record reports
+                is what registers all three adapters, and without it Active Record reports
                 `aws_postgresql` as a nonexistent adapter.
             - text: >-
-                If you are starting without a Rails application, this is a complete
-                program. Save it as `main.rb` and run it:
+                If you are starting without a Rails application, add
+                `gem 'activerecord'` to the Gemfile from step 1 (outside Rails, nothing
+                else installs it), run `bundle install`, and this is a complete program.
+                Save it as `main.rb` and run it:
             - lang: ruby
               code: |
                 # main.rb
@@ -191,10 +196,21 @@ wrappers:
             - text: |
                 :::note Mixing wrapped and standard adapters in one application
                 The wrapped adapters register their type information under the underlying
-                `postgresql` and `mysql2` adapter names. If one application uses both a
-                standard connection (`postgresql`/`mysql2`) and a wrapped one
-                (`aws_postgresql`/`aws_mysql2`), a custom type registered for one is shared
-                with the other, because both resolve under the same underlying adapter key.
+                `postgresql`, `mysql2`, and `trilogy` adapter names. If one application uses
+                both a standard connection (`postgresql`/`mysql2`/`trilogy`) and a wrapped one
+                (`aws_postgresql`/`aws_mysql2`/`aws_trilogy`), a custom type registered for
+                one is shared with the other, because both resolve under the same underlying
+                adapter key.
+                :::
+            - text: |
+                :::note Keeping the password out of your source
+                Read it from the environment with `ENV.fetch('PGPASSWORD')` in Ruby, or
+                `<%= ENV.fetch('PGPASSWORD') %>` in `config/database.yml`, or have
+                AWS manage it: add `secrets_manager` to `wrapper_plugins` and drop the
+                `password:` key, as described on
+                [AWS Secrets Manager Plugin](using-plugins/aws-secrets-manager). For a
+                database user with no password at all, consider using `iam` instead; see
+                [IAM Authentication Plugin](using-plugins/iam-authentication).
                 :::
             - text: |
                 :::note Keeping the password out of your source
@@ -210,8 +226,8 @@ wrappers:
           blocks:
             - text: >-
                 Without Active Record, the wrapper provides connection classes that
-                stand in for `PG::Connection` and `Mysql2::Client`. This is a complete
-                program; save it as `main.rb` and run it:
+                stand in for `PG::Connection`, `Mysql2::Client`, and `Trilogy`. This is a
+                complete program; save it as `main.rb` and run it:
             - lang: ruby
               code: |
                 # main.rb
@@ -241,7 +257,10 @@ wrappers:
                 stands in for `PG::Connection` and takes `dbname:` and `user:`.
                 For MySQL, `require 'aws_advanced_ruby_driver_wrapper/mysql'` and use
                 `AwsAdvancedRubyDriverWrapper::WrapperMysql2Client`, which stands in
-                for `Mysql2::Client` and takes `database:` and `username:`. Either
+                for `Mysql2::Client` and takes `database:` and `username:`. To use the
+                Trilogy driver instead, `require 'aws_advanced_ruby_driver_wrapper/trilogy'`
+                and use `AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient`, which stands
+                in for `Trilogy` and takes the same `database:` and `username:`. Either
                 way the calls your code already makes keep working, and the plugins
                 act on each one.
         - title: "Next"
@@ -323,7 +342,7 @@ wrapperOnly:
     - |
       ### ActiveRecord integration
 
-      Through ActiveRecord (the `aws_postgresql` / `aws_mysql2` adapters), the adapter's
+      Through ActiveRecord (the `aws_postgresql` / `aws_mysql2` / `aws_trilogy` adapters), the adapter's
       `translate_exception` decides what your code rescues, and only one failover error is
       translated:
 
@@ -466,7 +485,7 @@ enhanced:
   thirdPartyNote:
     ruby: |
       :::note Using the wrapper through ActiveRecord
-      When you use the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`),
+      When you use the wrapper through ActiveRecord (`aws_postgresql`, `aws_mysql2`, or `aws_trilogy`),
       reconnection is partially handled for you. On a successful failover the adapter
       re-runs `configure_connection` and reuses the pooled connection in place rather than
       discarding it, so you should not call `disconnect!` or discard the connection object
@@ -476,9 +495,47 @@ enhanced:
   wrapperOnly:
     ruby:
       - |
+        ## Timeouts and idle connections on MySQL
+
+        On MySQL, the failover plugin treats a connection that timed out or was closed by
+        the server as lost, and fails over. This applies to `mysql2` (`WrapperMysql2Client`
+        and `aws_mysql2`) and to `trilogy` (`WrapperTrilogyClient` and `aws_trilogy`), and
+        includes:
+
+        - A query that runs longer than the client's `read_timeout`. The driver closes the
+          socket before it raises the timeout, so the connection cannot be reused.
+        - A query on a connection that sat idle longer than the server's `wait_timeout`.
+          The server closes such a connection; MySQL 8.0.24 and later reports error 4031,
+          and earlier versions report a lost connection (2006 or 2013).
+        - A connection lost during a query, or a server that has gone away (with `mysql2`,
+          errors 2006, 2013, and 2055).
+
+        Your code then sees `FailoverSuccessError` (or `TransactionStateUnknownError` inside a
+        transaction) instead of the driver's timeout or connection error. Through ActiveRecord
+        these errors are re-raised unchanged (see [ActiveRecord integration](#activerecord-integration)),
+        and ActiveRecord does not retry them for you. To avoid a failover that is caused by a
+        slow query or an idle connection rather than by the database:
+
+        - Set `read_timeout` higher than your slowest expected query.
+        - Keep pooled connections from outliving `wait_timeout`: raise `wait_timeout` on the
+          server, or have the pool close idle connections sooner, for example with
+          ActiveRecord's `idle_timeout`.
+
+        A lock wait timeout (error 1205) does not trigger failover. The connection is still
+        healthy, and the driver's error is raised as usual.
+
+        :::note Changed in 1.1.0
+        Before 1.1.0, `mysql2` did not fail over on a `read_timeout` or on errors 4031 and
+        2055. A `read_timeout` raised `Mysql2::Error::TimeoutError` (`ActiveRecord::AdapterTimeout`
+        under `aws_mysql2`), and errors 4031 and 2055 were raised as is. Under `aws_mysql2`,
+        error 4031 became `ActiveRecord::ConnectionFailed`, which ActiveRecord answered by
+        reconnecting to the original endpoint and retrying the queries it considers
+        retryable, and error 2055 became `ActiveRecord::StatementInvalid`.
+        :::
+      - |
         ## ActiveRecord integration
 
-        When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the
+        When using the wrapper through ActiveRecord (`aws_postgresql`, `aws_mysql2`, or `aws_trilogy`), the
         adapter's `translate_exception` decides what your code actually rescues, and the
         outcome differs by error:
 

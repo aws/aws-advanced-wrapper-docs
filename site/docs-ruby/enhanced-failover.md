@@ -143,7 +143,7 @@ conn = AwsAdvancedRubyDriverWrapper::WrapperPgConnection.new(
 
 Verify plugin compatibility within your Ruby configuration using the [compatibility guide](./compatibility).
 
-:::warning
+:::warning Only one failover plugin at a time
 Only one failover plugin may be enabled per connection. Do not use `failover` together with the other `gdb_failover` plugin at the same time for the same connection. Configuring more than one raises a `PluginConflictError` at connection initialization.
 :::
 
@@ -224,16 +224,54 @@ first and reuse the connection when failover succeeded.
 :::
 
 :::note Using the wrapper through ActiveRecord
-When you use the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`),
+When you use the wrapper through ActiveRecord (`aws_postgresql`, `aws_mysql2`, or `aws_trilogy`),
 reconnection is partially handled for you. On a successful failover the adapter
 re-runs `configure_connection` and reuses the pooled connection in place rather than
 discarding it, so you should not call `disconnect!` or discard the connection object
 yourself — the pool already holds the live, reconnected connection.
 :::
 
+## Timeouts and idle connections on MySQL
+
+On MySQL, the failover plugin treats a connection that timed out or was closed by
+the server as lost, and fails over. This applies to `mysql2` (`WrapperMysql2Client`
+and `aws_mysql2`) and to `trilogy` (`WrapperTrilogyClient` and `aws_trilogy`), and
+includes:
+
+- A query that runs longer than the client's `read_timeout`. The driver closes the
+  socket before it raises the timeout, so the connection cannot be reused.
+- A query on a connection that sat idle longer than the server's `wait_timeout`.
+  The server closes such a connection; MySQL 8.0.24 and later reports error 4031,
+  and earlier versions report a lost connection (2006 or 2013).
+- A connection lost during a query, or a server that has gone away (with `mysql2`,
+  errors 2006, 2013, and 2055).
+
+Your code then sees `FailoverSuccessError` (or `TransactionStateUnknownError` inside a
+transaction) instead of the driver's timeout or connection error. Through ActiveRecord
+these errors are re-raised unchanged (see [ActiveRecord integration](#activerecord-integration)),
+and ActiveRecord does not retry them for you. To avoid a failover that is caused by a
+slow query or an idle connection rather than by the database:
+
+- Set `read_timeout` higher than your slowest expected query.
+- Keep pooled connections from outliving `wait_timeout`: raise `wait_timeout` on the
+  server, or have the pool close idle connections sooner, for example with
+  ActiveRecord's `idle_timeout`.
+
+A lock wait timeout (error 1205) does not trigger failover. The connection is still
+healthy, and the driver's error is raised as usual.
+
+:::note Changed in 1.1.0
+Before 1.1.0, `mysql2` did not fail over on a `read_timeout` or on errors 4031 and
+2055. A `read_timeout` raised `Mysql2::Error::TimeoutError` (`ActiveRecord::AdapterTimeout`
+under `aws_mysql2`), and errors 4031 and 2055 were raised as is. Under `aws_mysql2`,
+error 4031 became `ActiveRecord::ConnectionFailed`, which ActiveRecord answered by
+reconnecting to the original endpoint and retrying the queries it considers
+retryable, and error 2055 became `ActiveRecord::StatementInvalid`.
+:::
+
 ## ActiveRecord integration
 
-When using the wrapper through ActiveRecord (`aws_postgresql` or `aws_mysql2`), the
+When using the wrapper through ActiveRecord (`aws_postgresql`, `aws_mysql2`, or `aws_trilogy`), the
 adapter's `translate_exception` decides what your code actually rescues, and the
 outcome differs by error:
 

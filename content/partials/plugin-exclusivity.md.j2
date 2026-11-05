@@ -17,12 +17,20 @@
 
   `conflict_error`, when given, names the error the wrapper raises if the
   group's plugins are combined.
+
+  `lead` is the one canonical statement of the rule.
 #}
+{% macro lead(group_label) -%}
+Only one {{ group_label }} plugin may be enabled per connection.
+{%- endmacro %}
 {% macro exclusivity(group_label, this_code, others, conflict_error=none) -%}
-Only one {{ group_label }} plugin may be enabled per connection. Do not use `{{ this_code }}` together with
+{{ lead(group_label) }} Do not use `{{ this_code }}` together with
 {%- if others | length == 1 %} the other `{{ others[0] }}` plugin
 {%- elif others | length > 1 %} any of the other {{ group_label }} plugins ({% for c in others %}`{{ c }}`{% if not loop.last %}, {% endif %}{% endfor %})
 {%- else %} any other {{ group_label }} plugin
 {%- endif %} at the same time for the same connection.
 {%- if conflict_error %} Configuring more than one raises a `{{ conflict_error }}` at connection initialization.{% endif %}
+{%- endmacro %}
+{% macro exclusivity_footnote(group_label, codes) -%}
+{{ lead(group_label) }} The {% for c in codes %}`{{ c }}`{% if not loop.last %}{% if loop.revindex0 == 1 %}{% if codes | length > 2 %},{% endif %} and {% else %}, {% endif %}{% endif %}{% endfor %} plugins each set the connection credential, so enabling more than one conflicts.
 {%- endmacro %}

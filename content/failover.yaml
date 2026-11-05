@@ -85,8 +85,7 @@ wrappers:
     # way because it needs a Rails application around it, so the two paths are
     # ordered by who the reader is, not by what fits in one file.
     gettingStarted:
-      note: "Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, and `mysql2` 0.5.7 or later."
-
+      note: "Requires Ruby 3.3 or later. The gem is `aws_advanced_ruby_driver_wrapper` on RubyGems. Tested with Active Record 7.2, 8.0, and 8.1, `pg` 1.6.3 or later, `mysql2` 0.5.7 or later, and `trilogy` 2.13.2 or later."
       steps:
         - title: "1. Add the gem"
           blocks:

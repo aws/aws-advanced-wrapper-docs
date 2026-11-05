@@ -20,6 +20,14 @@ column never holds plaintext. See [Server-side enforcement is required](#server-
 and [Enforce encryption in the database](#enforce-encryption-in-the-database) below.
 :::
 
+:::warning Not supported with the Trilogy driver
+The plugin can encrypt a value only when it is sent as a bound parameter, which
+requires prepared statements. The Trilogy driver does not support prepared
+statements, so the plugin cannot be used with it: both the plugin and
+`KeyManagementUtility` refuse a Trilogy connection with an explicit error. Use the
+`mysql2` driver (or `pg` on PostgreSQL) for column encryption.
+:::
+
 
 :::info Available since
 Version 1.0.0
@@ -139,7 +147,8 @@ then use `Plugins::Encryption::KeyManagementUtility` to set up each column.
 ### Set up an encrypted column
 
 `KeyManagementUtility` runs on a plain `pg` or `mysql2` connection that you
-open and close yourself. Build its configuration from the same `encryption_*`
+open and close yourself. (It does not support `trilogy`, for the same
+prepared-statement reason the plugin does not.) Build its configuration from the same `encryption_*`
 parameters the plugin uses, then create a master key and turn on encryption
 for an existing binary column:
 

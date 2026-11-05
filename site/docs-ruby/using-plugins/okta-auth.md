@@ -184,5 +184,13 @@ AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
 )
 ```
 
+With the Trilogy driver, use
+`AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient`. `enable_cleartext_plugin:
+true` is still required — without it Trilogy raises `Trilogy::AuthPluginError`
+— but two TLS keys differ: the CA certificate is `ssl_ca` rather than `sslca`,
+and on the direct client `ssl_mode` must be an integer constant
+(`ssl_mode: Trilogy::SSL_VERIFY_IDENTITY`), not a string. See
+[Configuring TLS/SSL](../configuring-tls).
+
 For the full picture, see [Configuring TLS/SSL](../configuring-tls).
 

@@ -57,7 +57,7 @@ universal:
   - key: kmsEncryption
     codes: { ruby: kms_encryption }
     page: using-plugins/kms-encryption
-    description: "Transparent column-level encryption using AWS KMS."
+    description: "Transparent column-level encryption using AWS KMS. Not supported with the `trilogy` driver (it has no prepared statements); use `mysql2` or `pg`."
 
 # Reason text for the incompatible cells in the database-type and endpoint
 # matrices. Cells tag a `reason:` key; the generator emits one footnote per

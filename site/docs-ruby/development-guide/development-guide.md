@@ -8,7 +8,7 @@ This guide is for **open-source contributors to the AWS Advanced Ruby Driver Wra
 
 ## Setup
 
-Make sure you have Ruby 3.3+ installed, along with your choice of underlying driver gem (`pg` or `mysql2`).
+Make sure you have Ruby 3.3+ installed, along with your choice of underlying driver gem (`pg`, `mysql2`, or `trilogy`).
 
 Clone the AWS Advanced Ruby Driver Wrapper repository, then you can make changes in the repository. This project is built using Bundler + RSpec.
 

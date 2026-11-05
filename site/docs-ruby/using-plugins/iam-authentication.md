@@ -66,6 +66,16 @@ AwsAdvancedRubyDriverWrapper::WrapperMysql2Client.new(
 )
 ```
 
+With the Trilogy driver, swap in
+`AwsAdvancedRubyDriverWrapper::WrapperTrilogyClient`. IAM authentication works
+the same way — keep `enable_cleartext_plugin: true` — but two TLS keys differ
+on Trilogy: the CA certificate is `ssl_ca` (Trilogy's name for it) rather than
+`sslca`, and on the direct client `ssl_mode` must be an integer constant
+(`ssl_mode: Trilogy::SSL_VERIFY_IDENTITY`) — a string or symbol raises
+`TypeError`. (The `aws_trilogy` ActiveRecord adapter does accept the string
+mode names such as `verify_identity`.) See
+[Configuring TLS/SSL](../configuring-tls) for the full per-driver table.
+
 **PostgreSQL (`pg`):**
 
 ```ruby
@@ -102,6 +112,10 @@ does **not** set this for you, so pass `enable_cleartext_plugin: true` when
 using the plugin with MySQL. Because the token is sent in cleartext, you
 must also use a TLS/SSL connection so it is encrypted in transit. This does
 not apply to PostgreSQL (`pg`).
+
+This applies to both MySQL drivers (`mysql2` and `trilogy`). On `trilogy`,
+omitting `enable_cleartext_plugin: true` makes the driver raise
+`Trilogy::AuthPluginError` and the token is never sent.
 :::
 
 

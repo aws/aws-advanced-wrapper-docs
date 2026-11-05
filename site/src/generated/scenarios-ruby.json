@@ -1003,7 +1003,7 @@
             ]
           },
           "blocked": "Active Record supplies this. Talking to the gem directly, retrying is your code's decision.",
-          "hint": "Active Record retries safely retryable queries once by default.",
+          "hint": "Active Record retries safely retryable queries once by default. It does not retry `FailoverSuccessError` or `TransactionStateUnknownError`, which the failover plugin raises after a successful failover.\n",
           "emit": {
             "pool": {
               "connection_retries": 3,
@@ -1165,6 +1165,7 @@
         ],
         "notes": [
           "The plugin holds traffic during the switchover instead of letting it fail, then resumes against the promoted deployment.",
+          "After the switchover, connections that were opened to the old blue environment are closed the next time they are used. If the failover plugin is enabled (list `failover` in `wrapper_plugins` alongside `bg`), that use triggers failover and raises one of the failover errors: `FailoverSuccessError` (or `TransactionStateUnknownError` inside a transaction) when the connection reconnects to the new environment, or `FailoverFailedError` when it cannot. Handle it as you would any other failover. Set `bg_drop_blue_connections: false` to keep using those connections instead, at the risk of reading from the retired blue environment.",
           "If you connect through an RDS Proxy, AWS requires the blue cluster to be registered with the proxy before the Blue/Green deployment is created \u2014 you cannot add the proxy afterward."
         ],
         "links": [
